@@ -100,7 +100,7 @@ struct ChangelogView: View {
                 withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: .top) }
             }
         }
-        .onAppear { ThemeStore.shared.follow(cover: nil) }
+        .onAppear { ThemeStore.shared.followNothing() }
     }
 
     private func card(_ e: ChangelogEntry) -> some View {

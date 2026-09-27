@@ -19,6 +19,8 @@ final class DownloadJob: ObservableObject, Identifiable {
     fileprivate var process: Process?
     fileprivate var lastError: String?
     fileprivate var cancelRequested = false
+    /// Started from the Find tab: open the song in the editor when it's done.
+    var openWhenDone = false
 
     init(link: String) {
         self.link = link
@@ -81,14 +83,14 @@ final class Downloader: ObservableObject {
         didSet { UserDefaults.standard.set(matchLoudness, forKey: "dlMatchLoudness") }
     }
 
-    /// Called with each finished MP3 (the app adds it to the Files list).
-    var onFinished: (URL) -> Void = { _ in }
+    /// Called with each finished MP3 and its job (the app adds it to the Files list).
+    var onFinished: (URL, DownloadJob) -> Void = { _, _ in }
 
     var toolsReady: Bool { ytdlp != nil && ffmpeg != nil }
     var latest: DownloadJob? { jobs.first }
 
     private static let searchPaths = ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.local/bin", "/usr/bin"]
-    private static var toolEnvironment: [String: String] {
+    static var toolEnvironment: [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = (searchPaths + ["/bin", "/usr/sbin", "/sbin"]).joined(separator: ":")
         return env
@@ -169,16 +171,19 @@ final class Downloader: ObservableObject {
         if p.runModal() == .OK, let u = p.url { folder = u }
     }
 
-    func start() {
-        let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Downloads `link` (or the link box). Returns the new job, or nil if the link isn't valid.
+    @discardableResult
+    func start(_ given: String? = nil, openWhenDone: Bool = false) -> DownloadJob? {
+        let text = (given ?? link).trimmingCharacters(in: .whitespacesAndNewlines)
         guard let u = URL(string: text), let scheme = u.scheme?.lowercased(), ["http", "https"].contains(scheme), u.host != nil else {
             message = "That doesn't look like a link. Paste a full https:// address."
-            return
+            return nil
         }
-        guard let ytdlp, let ffmpeg else { return }
+        guard let ytdlp, let ffmpeg else { return nil }
         message = nil
-        link = ""
+        if given == nil { link = "" }
         let job = DownloadJob(link: text)
+        job.openWhenDone = openWhenDone
         jobs.insert(job, at: 0)
 
         let p = Process()
@@ -215,6 +220,7 @@ final class Downloader: ObservableObject {
         do { try p.run() } catch {
             job.phase = .failed("Couldn't start yt-dlp: \(error.localizedDescription)")
         }
+        return job
     }
 
     private static func handle(line raw: String, job: DownloadJob) {
@@ -263,11 +269,11 @@ final class Downloader: ObservableObject {
                 case .success(let title):
                     job.title = title
                     job.phase = .done
-                    self.onFinished(file)
+                    self.onFinished(file, job)
                 case .failure:
                     // The MP3 itself is fine; only the tag clean-up failed.
                     job.phase = .done
-                    self.onFinished(file)
+                    self.onFinished(file, job)
                 }
             }
         }
@@ -434,7 +440,7 @@ struct DownloaderView: View {
         }
         .onAppear {
             dl.refreshTools()
-            ThemeStore.shared.follow(cover: nil)
+            ThemeStore.shared.followNothing()
         }
     }
 

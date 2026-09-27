@@ -24,6 +24,12 @@ hi i made claude make me a mac os mp3 tagger, mostly for spotify, look at the sc
 - Picture-in-picture mini player: drag it anywhere, it snaps to the corners
 - A spinning vinyl record (33⅓ RPM) or CD (real CD speed, Yeezus-style reflections) slides out from behind the cover
 - Play/pause, song position slider, slide-out volume with mute, and a ✕ to close
+- Dynamic Island-style visualizer that moves with the song's real bass, mids and treble, in the album cover's colors
+
+**Auto (find & download)**
+- Type a song and artist, and get the best YouTube matches with thumbnail, length, channel and views
+- Click a thumbnail to hear the first 30 seconds
+- Pick one: it downloads, cleans up the tags, matches Spotify loudness and opens in the editor so you can fix the cover
 
 **Download**
 - Paste a video link and get a tagged MP3 (uses yt-dlp and ffmpeg from Homebrew; install/update from the app)
@@ -37,10 +43,12 @@ hi i made claude make me a mac os mp3 tagger, mostly for spotify, look at the sc
 
 **Themes**
 - Liquid Glass style with 9 color presets, a custom color, sidebar tint, or colors that match the album cover
+  (with nothing selected, they follow the song that's playing)
 - Mavericks style: an OS X 10.9-inspired skeuomorphic look with the same layout
 - Theme picker also switches the player disc between vinyl and CD
 
 ![Files](Screenshots/files.png)
+![Auto](Screenshots/auto.png)
 ![History](Screenshots/history.png)
 ![Download](Screenshots/download.png)
 ![Theme and mini player](Screenshots/theme.png)

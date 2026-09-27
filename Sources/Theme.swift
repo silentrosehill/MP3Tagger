@@ -217,8 +217,30 @@ final class ThemeStore: ObservableObject {
         return t
     }
 
-    /// Call whenever the cover on screen changes (nil = nothing showing).
+    /// True while no song is on screen (placeholder, Download, Auto, Changelog): the playing song's cover is used then.
+    private var showingNoSong = false
+
+    /// Call when no song is selected. With "Match album cover" on, the song playing in the mini player
+    /// (if any) sets the colors instead.
+    func followNothing() {
+        showingNoSong = true
+        apply(cover: playingCover)
+    }
+
+    /// The player started, switched or stopped a song.
+    func playbackChanged() {
+        if showingNoSong { apply(cover: playingCover) }
+    }
+
+    private var playingCover: Data? { Player.shared.url != nil ? Player.shared.nowCover : nil }
+
+    /// Call whenever the cover of the song on screen changes (nil = that song has no cover).
     func follow(cover data: Data?) {
+        showingNoSong = false
+        apply(cover: data)
+    }
+
+    private func apply(cover data: Data?) {
         guard let data else {
             coverKey = nil
             withAnimation(.easeInOut(duration: 0.6)) { coverTheme = nil }

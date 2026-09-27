@@ -2,6 +2,22 @@
 
 Version numbers: minor = a new feature, patch = a fix. The build number counts every update.
 
+## 3.12.0 (build 48)
+- Match album cover: when no song is selected (empty Files or History, Auto, Download, Changelog), the colors follow the song playing in the mini player. They go back to your theme when you close the player.
+
+## 3.11.0 (build 47)
+- Mini player: a Dynamic Island-style audio visualizer next to the song title. Six bars move with the song's real bass, mids and treble, in the album cover's colors, and settle into dots when paused.
+
+## 3.10.1 (build 46)
+- The Find tab is now a full tab called Auto, and Download is now an icon tab (⬇︎) next to it.
+
+## 3.10.0 (build 45)
+- Find tab: click a thumbnail to hear the first 30 seconds of that result, with a progress ring and a stop button. Click again (or pick another) to stop. It follows the app's volume and pauses your own song.
+
+## 3.9.0 (build 44)
+- New Find tab (🔍 next to Download): type a song and artist to see YouTube matches with their thumbnail, length, channel and views.
+- Pick one and it downloads (with tag cleanup and Spotify loudness), then opens straight in the editor so you can fix the cover and tags.
+
 ## 3.8.2 (build 43)
 - Fix: the window can't be made smaller than 1045 × 607, so the layout never gets squeezed.
 

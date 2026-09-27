@@ -23,6 +23,7 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
         url = nil
         isPlaying = false
         PlayerProgress.shared.reset()
+        ThemeStore.shared.playbackChanged()
     }
 
     var currentTime: Double { player?.currentTime ?? 0 }
@@ -40,12 +41,13 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @discardableResult
     func toggle(_ u: URL) -> String? {
         if url == u, let p = player {
-            if p.isPlaying { p.pause(); isPlaying = false } else { p.play(); isPlaying = true }
+            if p.isPlaying { p.pause(); isPlaying = false } else { SongFinder.shared.stopPreview(); p.play(); isPlaying = true }
             return nil
         }
         player?.stop()
         do {
             let p = try AVAudioPlayer(contentsOf: u)
+            SongFinder.shared.stopPreview()      // one thing playing at a time
             p.delegate = self
             p.volume = Float(PlayerVolume.shared.volume)
             p.play()
@@ -54,10 +56,12 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 ?? u.deletingPathExtension().lastPathComponent
             nowArtist = tag?.artist ?? ""
             nowCover = tag?.cover
+            VisualizerModel.shared.load(u, cover: tag?.cover)
             player = p
             url = u
             isPlaying = true
             PlayerProgress.shared.start()
+            ThemeStore.shared.playbackChanged()
             return nil
         } catch {
             player = nil
@@ -73,6 +77,7 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
             self.url = nil
             self.player = nil
             PlayerProgress.shared.reset()
+            ThemeStore.shared.playbackChanged()
         }
     }
 }
@@ -123,6 +128,7 @@ final class PlayerVolume: ObservableObject {
     @Published var volume: Double = UserDefaults.standard.object(forKey: "volume") as? Double ?? 0.8 {
         didSet {
             Player.shared.applyVolume(volume)
+            SongFinder.shared.setPreviewVolume(volume)
             UserDefaults.standard.set(volume, forKey: "volume")
         }
     }
@@ -370,7 +376,10 @@ struct NowPlayingBar: View {
                             MarqueeText(text: player.nowArtist.isEmpty ? "Unknown artist" : player.nowArtist, font: .callout)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer(minLength: 0)
+                        Spacer(minLength: 8)
+                        // Dynamic Island-style visualizer, moving with the song's real frequencies
+                        AudioBars(playing: spinning, height: 24)
+                            .padding(.trailing, 6)
                     }
                     .animation(.spring(response: 0.6, dampingFraction: 0.78), value: spinning)
                     .contentShape(Rectangle())

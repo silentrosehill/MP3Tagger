@@ -18,7 +18,7 @@ let appVersion: String = {
     return v.hasSuffix(".0") ? String(v.dropLast(2)) : v
 }()
 
-enum SidebarTab: Hashable { case files, history, download, changelog }
+enum SidebarTab: Hashable { case files, history, download, find, changelog }
 
 final class TrackFile: ObservableObject, Identifiable {
     let id = UUID()
@@ -48,6 +48,7 @@ final class Library: ObservableObject {
         switch ProcessInfo.processInfo.environment["MP3TAGGER_TAB"] {
         case "history": .history
         case "download": .download
+        case "find", "auto": .find
         case "changelog": .changelog
         default: .files
         }
@@ -81,6 +82,14 @@ final class Library: ObservableObject {
     }
 
     func isDownloaded(_ url: URL) -> Bool { downloadedPaths.contains(url.standardizedFileURL.path) }
+
+    /// A download finished: list it in Files, and if it was picked in the Find tab, open it in the editor
+    /// (unless you've moved on to another tab).
+    func downloadFinished(_ url: URL, job: DownloadJob) {
+        addDownloaded(url)
+        status = "Downloaded \(url.lastPathComponent) — added to Files"
+        if job.openWhenDone, tab == .find { openInEditor(url) }
+    }
 
     /// Called when the downloader finishes a song.
     func addDownloaded(_ url: URL) {
@@ -301,10 +310,7 @@ struct ContentView: View {
         .onAppear {
             themeStore.applyAppearance()
             // finished downloads land in the Files list, ready to tweak
-            Downloader.shared.onFinished = { [lib] url in
-                lib.addDownloaded(url)
-                lib.status = "Downloaded \(url.lastPathComponent) — added to Files"
-            }
+            Downloader.shared.onFinished = { [lib] url, job in lib.downloadFinished(url, job: job) }
         }
         .environment(\.appTheme, themeStore.rendered)
         .environment(\.uiStyle, themeStore.style)
@@ -335,19 +341,21 @@ struct DetailColumn: View {
                 ChangelogView(lib: lib)
             } else if lib.tab == .download {
                 DownloaderView(lib: lib)
+            } else if lib.tab == .find {
+                FindView(lib: lib)
             } else if lib.tab == .history {
                 if let e = lib.history.entries.first(where: { $0.id == lib.historySelection }) {
                     HistoryDetail(entry: e, lib: lib).id(e.id)
                 } else {
                     Text(lib.history.entries.isEmpty ? "Songs you save will show up here" : "Select a song")
                         .foregroundStyle(.secondary)
-                        .onAppear { ThemeStore.shared.follow(cover: nil) }
+                        .onAppear { ThemeStore.shared.followNothing() }
                 }
             } else if let f = lib.selected {
                 EditorView(file: f, lib: lib).id(f.id)
             } else {
                 Text("Select a file").foregroundStyle(.secondary)
-                    .onAppear { ThemeStore.shared.follow(cover: nil) }
+                    .onAppear { ThemeStore.shared.followNothing() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -388,14 +396,14 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             GlassSegmented(selection: $lib.tab,
-                           options: [(.files, "Files"), (.history, "History"), (.download, "Download"), (.changelog, "Changelog")],
-                           icons: [.changelog: "list.bullet.rectangle.portrait"])
+                           options: [(.files, "Files"), (.history, "History"), (.find, "Auto"), (.download, "Download"), (.changelog, "Changelog")],
+                           icons: [.download: "arrow.down.circle", .changelog: "list.bullet.rectangle.portrait"])
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
             if lib.tab == .changelog {
                 ChangelogSidebar(lib: lib)
-            } else if lib.tab == .download {
+            } else if lib.tab == .download || lib.tab == .find {
                 DownloadsSidebar(lib: lib)
             } else if lib.tab == .files {
                 List(lib.files, selection: $lib.selection) { f in
