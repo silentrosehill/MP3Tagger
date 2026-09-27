@@ -2,6 +2,27 @@
 
 Version numbers: minor = a new feature, patch = a fix. The build number counts every update.
 
+## 3.19.0 (build 55)
+- Undo and Redo (⌘Z / ⇧⌘Z) for changes you haven't saved yet: tags, cover, Official Tags, loudness and trim. Typing in a field counts as one step, and the Edit menu says what will be undone. Saving starts fresh.
+
+## 3.18.0 (build 54)
+- Trim: cut the talking intro or outro of a song, losslessly (whole MP3 frames, no re-encoding). Play the song and click Here at the right moment, or nudge by 0.5 s, then preview with ▶︎. It applies when you save, and Save As keeps the original. The song's length info and LAME/Xing header are updated so players show the right duration.
+
+## 3.17.0 (build 53)
+- Queue: when a song ends, the next one in the list you started it from (Files or History) plays.
+- Mini player: ⏮ and ⏭ buttons. ⏮ restarts the song, or goes back one if it only just started.
+- Keyboard: Space = play/pause (or plays the selected song), ← / → = previous / next. These are ignored while you're typing. There's also a new Playback menu (⌘← / ⌘→).
+
+## 3.16.0 (build 52)
+- Update check: once a day the app asks GitHub whether there's a newer release and offers to download it ("Later" skips that version). You can also check any time from MP3 Tagger menu → Check for Updates….
+
+## 3.15.0 (build 51)
+- Rename from tags: turn a messy file name into "Artist - Title.mp3". Click the link under the file path, or right-click a song → Rename from Tags / Rename All from Tags. History, downloads and the player follow the new name. Name clashes become "… 2.mp3".
+
+## 3.14.0 (build 50)
+- Official tags: downloads (Auto and Download) are looked up in Apple Music's catalog, and on a clear match they get the official title, artist, album, album artist, year, track number, genre and a high-res cover. Remixes, mashups, slowed versions and unclear matches are left alone. You can turn this off in the Download tab.
+- Editor: a new ✨ Official Tags button to pick the right song from Apple Music and fill everything in.
+
 ## 3.13.0 (build 49)
 - New ⓘ button next to the theme button: it explains what each tab, the mini player and the theme do. Click a tab in it to jump there.
 

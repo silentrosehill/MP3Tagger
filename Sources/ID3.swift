@@ -181,7 +181,8 @@ enum ID3 {
     /// `gainDelta` changes the audio's volume losslessly (1.5 dB steps) relative to `source`.
     /// Returns the total gain now recorded in the file (less than asked only if the audio had no room for it).
     @discardableResult
-    static func write(_ tag: ID3Tag, from source: URL, to destination: URL, gainDelta: Int = 0) throws -> Int {
+    static func write(_ tag: ID3Tag, from source: URL, to destination: URL, gainDelta: Int = 0,
+                      trim: (start: Double, end: Double?)? = nil) throws -> Int {
         let data = try Data(contentsOf: source)
         var audio = data
         if let (_, flags, size) = header(data) {
@@ -195,6 +196,7 @@ enum ID3 {
         }
 
         let applied = Loudness.applyGain(&audio, steps: gainDelta)
+        if let trim { audio = MP3Trim.cut(audio, start: trim.start, end: trim.end) }
         var tag = tag
         tag.gainSteps += applied - gainDelta
 

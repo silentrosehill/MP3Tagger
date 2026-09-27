@@ -52,6 +52,13 @@ final class HistoryStore: ObservableObject {
         persist()
     }
 
+    /// A song was renamed or moved: keep its history entry pointing at it.
+    func moved(from old: URL, to new: URL) {
+        guard let i = entries.firstIndex(where: { $0.path == old.path }) else { return }
+        entries[i].path = new.path
+        persist()
+    }
+
     func remove(_ id: HistoryEntry.ID) {
         entries.removeAll { $0.id == id }
         persist()
@@ -75,7 +82,7 @@ struct HistoryRow: View {
     var body: some View {
         let exists = entry.exists
         HStack {
-            PlayableThumb(url: entry.url, data: entry.thumb, onError: onError)
+            PlayableThumb(url: entry.url, data: entry.thumb, source: .history, onError: onError)
                 .disabled(!exists)
             VStack(alignment: .leading) {
                 MarqueeText(text: entry.displayTitle, font: .body, active: hover.on || selected)
@@ -142,7 +149,7 @@ struct HistoryDetail: View {
 
                     HStack {
                         Button {
-                            if let err = player.toggle(entry.url) { lib.status = err }
+                            if let err = player.toggle(entry.url, from: .history) { lib.status = err }
                         } label: {
                             Label(player.isPlaying(entry.url) ? "Pause" : "Play",
                                   systemImage: player.isPlaying(entry.url) ? "pause.fill" : "play.fill")

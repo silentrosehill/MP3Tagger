@@ -9,6 +9,18 @@ struct MP3TaggerApp: App {
             ContentView()
                 .frame(minWidth: 1045, minHeight: 555)   // window minimum 1045 × 607 (555 + the 52 pt toolbar)
         }
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Updater.shared.check(manual: true) }
+            }
+            CommandMenu("Playback") {
+                Button("Play / Pause   (Space)") { Player.shared.playPause() }
+                Button("Next Song") { Player.shared.next() }
+                    .keyboardShortcut(.rightArrow, modifiers: .command)
+                Button("Previous Song") { Player.shared.previous() }
+                    .keyboardShortcut(.leftArrow, modifiers: .command)
+            }
+        }
     }
 }
 
@@ -23,8 +35,11 @@ enum SidebarTab: Hashable { case files, history, download, find, changelog }
 final class TrackFile: ObservableObject, Identifiable {
     let id = UUID()
     @Published var url: URL
-    @Published var tag: ID3Tag
+    @Published var tag: ID3Tag { didSet { recordUndo(tag: oldValue) } }
     @Published var dirty = false
+    /// Pending lossless trim (seconds), applied on the next save.
+    @Published var trimStart: Double = 0 { didSet { recordUndo(trimStart: oldValue) } }
+    @Published var trimEnd: Double? { didSet { recordUndo(trimEnd: oldValue) } }
     /// Volume boost (1.5 dB steps) already applied to the audio on disk; `tag.gainSteps` is the wanted one.
     @Published var savedGain: Int
 
@@ -33,6 +48,70 @@ final class TrackFile: ObservableObject, Identifiable {
         let t = try ID3.read(url: url)
         self.tag = t
         self.savedGain = t.gainSteps
+    }
+
+    // MARK: Undo (⌘Z) for changes that aren't saved yet
+
+    /// The window's undo manager, set while this song is in the editor.
+    weak var undoManager: UndoManager?
+    /// True while restoring or saving, so those changes aren't recorded as new edits.
+    var undoSuspended = false
+    private var lastEdit: (field: String, at: Date)?
+
+    private struct State { var tag: ID3Tag; var trimStart: Double; var trimEnd: Double? }
+    private var state: State { State(tag: tag, trimStart: trimStart, trimEnd: trimEnd) }
+
+    private func recordUndo(tag old: ID3Tag? = nil, trimStart oldStart: Double? = nil, trimEnd oldEnd: Double?? = nil) {
+        guard !undoSuspended, let um = undoManager else { return }
+        var before = state
+        if let old { before.tag = old }
+        if let oldStart { before.trimStart = oldStart }
+        if let oldEnd { before.trimEnd = oldEnd }
+        let field = Self.changedField(before, state)
+        guard let field else { return }
+        // typing in one field counts as one step: only the state before the first keystroke is kept
+        if let last = lastEdit, last.field == field, Self.textFields.keys.contains(field), Date().timeIntervalSince(last.at) < 2 {
+            lastEdit = (field, Date())
+            return
+        }
+        lastEdit = (field, Date())
+        register(before, name: field, um: um)
+    }
+
+    private func register(_ s: State, name: String, um: UndoManager) {
+        um.registerUndo(withTarget: self) { f in
+            let current = f.state
+            f.undoSuspended = true
+            f.tag = s.tag; f.trimStart = s.trimStart; f.trimEnd = s.trimEnd
+            f.undoSuspended = false
+            f.dirty = true
+            f.lastEdit = nil
+            f.register(current, name: name, um: um)          // makes Redo possible
+        }
+        um.setActionName(name)
+    }
+
+    /// Clears this song's undo steps (after saving: undoing a trim into already-cut audio would cut twice).
+    func clearUndo() {
+        undoManager?.removeAllActions(withTarget: self)
+        lastEdit = nil
+    }
+
+    private static let textFields: [String: WritableKeyPath<ID3Tag, String>] = [
+        "Title": \.title, "Artist": \.artist, "Album": \.album, "Album Artist": \.albumArtist,
+        "Year": \.year, "Track": \.track, "Genre": \.genre]
+
+    /// A name for what changed ("Title", "Cover", "Trim"…), or nil if nothing did.
+    private static func changedField(_ a: State, _ b: State) -> String? {
+        let changedText = textFields.filter { a.tag[keyPath: $0.value] != b.tag[keyPath: $0.value] }.map(\.key)
+        let cover = a.tag.cover != b.tag.cover, gain = a.tag.gainSteps != b.tag.gainSteps
+        let trim = a.trimStart != b.trimStart || a.trimEnd != b.trimEnd
+        if changedText.count == 1, !cover, !gain, !trim { return changedText[0] }
+        if changedText.isEmpty, cover, !gain, !trim { return "Cover" }
+        if changedText.isEmpty, !cover, gain, !trim { return "Loudness" }
+        if changedText.isEmpty, !cover, !gain, trim { return "Trim" }
+        if changedText.isEmpty, !cover, !gain, !trim { return nil }
+        return "Tags"
     }
 }
 
@@ -102,6 +181,66 @@ final class Library: ObservableObject {
             files.removeAll { $0 === f }
             files.insert(f, at: 0)
         }
+    }
+
+    // MARK: Rename from tags
+
+    /// "Artist - Title.mp3" from the song's (current) tags, or nil without a title.
+    static func tagFileName(_ tag: ID3Tag) -> String? {
+        let title = tag.title.trimmingCharacters(in: .whitespaces)
+        guard !title.isEmpty else { return nil }
+        let artist = tag.artist.trimmingCharacters(in: .whitespaces)
+        let name = artist.isEmpty ? title : "\(artist) - \(title)"
+        // no slashes/colons (path separators), no leading dot (hidden file), sane length
+        let safe = name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        return String(safe.prefix(180)) + ".mp3"
+    }
+
+    /// True if the file is already called `name`, or "`name` 2.mp3" etc. because of a clash.
+    static func nameMatches(_ url: URL, _ name: String) -> Bool {
+        let file = url.lastPathComponent, base = String(name.dropLast(4))
+        return file == name || file.range(of: "^" + NSRegularExpression.escapedPattern(for: base) + #" \d+\.mp3$"#, options: .regularExpression) != nil
+    }
+
+    /// Renames the MP3 on disk to "Artist - Title.mp3". Keeps History, downloads and the player pointing at it.
+    @discardableResult
+    func renameFromTags(_ f: TrackFile, quiet: Bool = false) -> Bool {
+        guard let name = Self.tagFileName(f.tag) else {
+            if !quiet { status = "Add a title first" }
+            return false
+        }
+        let old = f.url
+        guard !Self.nameMatches(old, name) else { return false }
+        var dest = old.deletingLastPathComponent().appendingPathComponent(name)
+        var n = 2
+        // a different file already has that name: "Name 2.mp3", "Name 3.mp3"…
+        while FileManager.default.fileExists(atPath: dest.path),
+              dest.path.lowercased() != old.path.lowercased() {
+            dest = old.deletingLastPathComponent().appendingPathComponent(String(name.dropLast(4)) + " \(n).mp3")
+            n += 1
+        }
+        guard dest.path.lowercased() != old.path.lowercased() else { return false }   // already "Name 2.mp3"
+        do {
+            try FileManager.default.moveItem(at: old, to: dest)
+        } catch {
+            if !quiet { status = "Couldn't rename: \(error.localizedDescription)" }
+            return false
+        }
+        f.url = dest
+        if downloadedPaths.remove(old.standardizedFileURL.path) != nil {
+            downloadedPaths.insert(dest.standardizedFileURL.path)
+            persistDownloads()
+        }
+        history.moved(from: old, to: dest)
+        Player.shared.fileMoved(from: old, to: dest)
+        if !quiet { status = "Renamed to \(dest.lastPathComponent)" }
+        return true
+    }
+
+    func renameAllFromTags() {
+        let done = files.filter { renameFromTags($0, quiet: true) }.count
+        status = done == 0 ? "All file names already match their tags" : "Renamed \(done) file\(done == 1 ? "" : "s") from their tags"
     }
 
     /// Takes a song off the Files list (the MP3 itself is not touched).
@@ -186,9 +325,16 @@ final class Library: ObservableObject {
     @discardableResult
     private func write(_ f: TrackFile, to dest: URL) -> Bool {
         do {
-            let stored = try ID3.write(f.tag, from: f.url, to: dest, gainDelta: f.tag.gainSteps - f.savedGain)
+            let trim = f.trimStart > 0 || f.trimEnd != nil ? (start: f.trimStart, end: f.trimEnd) : nil
+            let stored = try ID3.write(f.tag, from: f.url, to: dest, gainDelta: f.tag.gainSteps - f.savedGain, trim: trim)
+            if trim != nil, Player.shared.url == f.url || Player.shared.url == dest { Player.shared.stop() }   // it was playing the old audio
+            f.undoSuspended = true
+            f.trimStart = 0
+            f.trimEnd = nil
             f.savedGain = stored
             f.tag.gainSteps = stored
+            f.undoSuspended = false
+            f.clearUndo()
             files.removeAll { $0 !== f && $0.url.standardizedFileURL == dest.standardizedFileURL }
             let oldPath = f.url.standardizedFileURL.path, newPath = dest.standardizedFileURL.path
             if oldPath != newPath, downloadedPaths.contains(oldPath) {
@@ -267,6 +413,7 @@ final class Library: ObservableObject {
 struct ContentView: View {
     @StateObject private var lib = Library()
     @ObservedObject private var themeStore = ThemeStore.shared
+    @ObservedObject private var updater = Updater.shared
 
     var body: some View {
         NavigationSplitView {
@@ -314,8 +461,14 @@ struct ContentView: View {
             return true
         }
         .overlay { FloatingPlayer() }
+        .updateAlert(updater)
         .onAppear {
             themeStore.applyAppearance()
+            if ProcessInfo.processInfo.environment["MP3TAGGER_NO_UPDATE_CHECK"] == nil { updater.check(manual: false) }
+            // the queue plays through whichever list a song was started from
+            Player.shared.queueSources[.files] = { [lib] in lib.files.map(\.url) }
+            Player.shared.queueSources[.history] = { [lib] in lib.history.entries.map(\.url) }
+            PlaybackKeys.install(lib: lib)
             // finished downloads land in the Files list, ready to tweak
             Downloader.shared.onFinished = { [lib] url, job in lib.downloadFinished(url, job: job) }
             // Screenshot helpers: MP3TAGGER_PLAY=<mp3> starts a song (use with MP3TAGGER_MUTE=1), MP3TAGGER_THEME=<seconds> opens the theme picker after that delay
@@ -426,6 +579,9 @@ struct SidebarView: View {
                     FileRow(file: f, downloaded: lib.isDownloaded(f.url), selected: lib.selection == f.id) { lib.status = $0 }
                         .contextMenu {
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([f.url]) }
+                            Button("Rename from Tags") { lib.renameFromTags(f) }
+                                .disabled(Library.tagFileName(f.tag).map { Library.nameMatches(f.url, $0) } ?? true)
+                            Button("Rename All from Tags") { lib.renameAllFromTags() }
                             Divider()
                             Button("Remove from List") { lib.removeFromList(f) }
                         }
@@ -537,7 +693,14 @@ struct CoverThumb: View {
 struct EditorView: View {
     @ObservedObject var file: TrackFile
     @ObservedObject var lib: Library
+    @Environment(\.undoManager) private var undoManager
     @StateObject private var fx = CoverFX()
+    @StateObject private var lookup = SheetFlag()
+    private var lookupOpen: Bool {
+        get { lookup.on }
+        nonmutating set { lookup.on = newValue }
+    }
+    private var lookupBinding: Binding<Bool> { Binding(get: { lookup.on }, set: { lookup.on = $0 }) }
 
     private func binding(_ kp: WritableKeyPath<ID3Tag, String>) -> Binding<String> {
         Binding(get: { file.tag[keyPath: kp] },
@@ -603,21 +766,45 @@ struct EditorView: View {
                         Button("Apply Album & Cover to All") { lib.applyAlbumInfoToAll(from: file) }
                             .buttonStyle(.purpleGlass)
                             .disabled(lib.files.count < 2)
+                        Button { lookupOpen = true } label: { Label("Official Tags", systemImage: "wand.and.stars") }
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.purpleGlassIcon(30))
+                            .help("Fill in the official tags and cover from Apple Music")
+                    }
+                    .sheet(isPresented: lookupBinding) {
+                        TagLookupSheet(file: file) { message in
+                            lookupOpen = false
+                            if let message { lib.status = message }
+                        }
                     }
                     .padding(.top, 8)
 
                     Text(file.url.path).font(.caption).foregroundStyle(.secondary)
                         .textSelection(.enabled).padding(.top, 4)
+                    if let name = Library.tagFileName(file.tag), !Library.nameMatches(file.url, name) {
+                        Button { lib.renameFromTags(file) } label: {
+                            Label("Rename file to “\(name)”", systemImage: "pencil.line")
+                                .font(.caption).lineLimit(1).truncationMode(.middle)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tint)
+                        .help("Rename the MP3 on disk to match its artist and title")
+                    }
 
                     LoudnessCard(file: file)
                         .padding(.top, 12)
+                    TrimCard(file: file)
+                        .padding(.top, 8)
                 }
                 .frame(maxWidth: 420)
             }
             .padding(24)
         }
         // "Match album cover": the theme follows this song's cover, live as it changes
-        .onAppear { ThemeStore.shared.follow(cover: file.tag.cover) }
+        .onAppear {
+            ThemeStore.shared.follow(cover: file.tag.cover)
+            file.undoManager = undoManager
+        }
         .onChange(of: file.tag.cover) { _, new in ThemeStore.shared.follow(cover: new) }
     }
 
@@ -689,5 +876,36 @@ func loadImage(_ providers: [NSItemProvider], completion: @escaping @MainActor (
             guard let img = obj as? NSImage else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { completion(img) } }
         }
+    }
+}
+
+/// Space = play/pause, ← / → = previous / next song, but never while typing in a text field or web page.
+@MainActor
+enum PlaybackKeys {
+    private static var monitor: Any?
+
+    static func install(lib: Library) {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak lib] event in
+            guard let lib, handle(event, lib: lib) else { return event }
+            return nil
+        }
+    }
+
+    private static func handle(_ event: NSEvent, lib: Library) -> Bool {
+        let mods = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        guard mods.isEmpty, let window = event.window, window.attachedSheet == nil, !(window is NSPanel) else { return false }
+        if let r = window.firstResponder, r is NSText || String(describing: type(of: r)).hasPrefix("WK") { return false }
+        let player = Player.shared
+        switch event.keyCode {
+        case 49:                                             // space
+            if player.url != nil { player.playPause() }
+            else if lib.tab == .files, let f = lib.selected { player.toggle(f.url, from: .files) }
+            else { return false }
+        case 124: guard player.url != nil else { return false }; player.next()       // →
+        case 123: guard player.url != nil else { return false }; player.previous()   // ←
+        default: return false
+        }
+        return true
     }
 }

@@ -28,6 +28,11 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
         ThemeStore.shared.playbackChanged()
     }
 
+    /// The playing file was renamed: AVAudioPlayer keeps reading it, only the path changes.
+    func fileMoved(from old: URL, to new: URL) {
+        if url == old { url = new }
+    }
+
     var currentTime: Double { player?.currentTime ?? 0 }
     var duration: Double { player?.duration ?? 0 }
 
@@ -40,13 +45,44 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func isPlaying(_ u: URL) -> Bool { isPlaying && url == u }
 
     /// Returns an error message if the file couldn't be played.
+    // MARK: Queue: when a song ends, the next one in the list it was started from plays
+
+    enum QueueSource { case files, history }
+    /// Lists to play through, registered by the app (Files order, History order).
+    var queueSources: [QueueSource: () -> [URL]] = [:]
+    private var source: QueueSource = .files
+
+    private var queue: [URL] { queueSources[source]?().filter { FileManager.default.fileExists(atPath: $0.path) } ?? [] }
+    var hasNext: Bool { url.flatMap { u in queue.firstIndex(of: u).map { $0 + 1 < queue.count } } ?? false }
+    var hasPrevious: Bool { url.flatMap { u in queue.firstIndex(of: u).map { $0 > 0 } } ?? false }
+
+    /// Plays the next song in the list. Returns false at the end of the list.
     @discardableResult
-    func toggle(_ u: URL) -> String? {
+    func next() -> Bool {
+        guard let u = url, let i = queue.firstIndex(of: u), i + 1 < queue.count else { return false }
+        return toggle(queue[i + 1], from: source) == nil
+    }
+
+    /// Back to the start of the song, or to the previous song if it only just started (like every music app).
+    func previous() {
+        guard let u = url else { return }
+        if currentTime > 3 { seek(to: 0); return }
+        if let i = queue.firstIndex(of: u), i > 0 { toggle(queue[i - 1], from: source) } else { seek(to: 0) }
+    }
+
+    /// Space bar: pause/resume the current song.
+    func playPause() {
+        if let u = url { toggle(u) }
+    }
+
+    @discardableResult
+    func toggle(_ u: URL, from src: QueueSource? = nil) -> String? {
         if url == u, let p = player {
             if p.isPlaying { p.pause(); isPlaying = false } else { SongFinder.shared.stopPreview(); p.play(); isPlaying = true }
             return nil
         }
         player?.stop()
+        if let src { source = src }
         do {
             let p = try AVAudioPlayer(contentsOf: u)
             SongFinder.shared.stopPreview()      // one thing playing at a time
@@ -75,6 +111,7 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     nonisolated func audioPlayerDidFinishPlaying(_ p: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
+            if self.next() { return }             // keep going through the list
             self.isPlaying = false
             self.url = nil
             self.player = nil
@@ -145,11 +182,17 @@ final class HoverState: ObservableObject {
     @Published var on = false
 }
 
+/// A simple on/off flag for sheets (no @State without Xcode's macros).
+final class SheetFlag: ObservableObject {
+    @Published var on = false
+}
+
 /// Small cover that doubles as a play/pause button, with a glass control on hover.
 struct PlayableThumb: View {
     let url: URL
     let data: Data?
     var size: CGFloat = 32
+    var source: Player.QueueSource = .files
     var onError: (String) -> Void = { _ in }
     @ObservedObject private var player = Player.shared
     @StateObject private var hover = HoverState()
@@ -160,7 +203,7 @@ struct PlayableThumb: View {
         let current = player.url == url
         let playing = player.isPlaying(url)
         Button {
-            if let err = player.toggle(url) { onError(err) }
+            if let err = player.toggle(url, from: source) { onError(err) }
         } label: {
             ZStack {
                 CoverThumb(data: data, size: size)
@@ -208,7 +251,7 @@ final class PiPState: ObservableObject {
     }
     @Published var drag: CGSize = .zero
     @Published var dragging = false
-    @Published var size = CGSize(width: 380, height: 130)
+    @Published var size = CGSize(width: 400, height: 130)
     /// The slide-out volume slider.
     @Published var volumeOpen = false
     private var volumeGeneration = 0
@@ -391,10 +434,21 @@ struct NowPlayingBar: View {
 
                     // Play/pause · song position (drag to skip through) · volume
                     HStack(spacing: 8) {
-                        Button { player.toggle(url) } label: {
-                            Label(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill")
+                        HStack(spacing: 2) {
+                            Button { player.previous() } label: { Label("Previous", systemImage: "backward.fill") }
+                                .buttonStyle(.plain).foregroundStyle(.secondary)
+                                .font(.system(size: 11)).frame(width: 18, height: 26).contentShape(Rectangle())
+                                .help("Previous song (←)")
+                            Button { player.toggle(url) } label: {
+                                Label(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill")
+                            }
+                            .help(player.isPlaying ? "Pause (Space)" : "Play (Space)")
+                            Button { player.next() } label: { Label("Next", systemImage: "forward.fill") }
+                                .buttonStyle(.plain).foregroundStyle(player.hasNext ? .secondary : .quaternary)
+                                .font(.system(size: 11)).frame(width: 18, height: 26).contentShape(Rectangle())
+                                .disabled(!player.hasNext)
+                                .help("Next song (→)")
                         }
-                        .help(player.isPlaying ? "Pause" : "Play")
 
                         Text(PlayerProgress.format(progress.current))
                             .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
@@ -474,7 +528,7 @@ struct NowPlayingBar: View {
                 .shadow(color: style == .mavericks ? .black.opacity(0.25) : theme.purple.opacity(0.3), radius: 10, y: 4)
             }
         }
-        .frame(width: 380)
+        .frame(width: 400)
     }
 }
 

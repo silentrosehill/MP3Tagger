@@ -83,6 +83,11 @@ final class Downloader: ObservableObject {
         didSet { UserDefaults.standard.set(matchLoudness, forKey: "dlMatchLoudness") }
     }
 
+    /// Look downloads up in Apple's catalog and use the official tags and cover when there's a clear match.
+    @Published var officialTags: Bool = UserDefaults.standard.object(forKey: "dlOfficialTags") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(officialTags, forKey: "dlOfficialTags") }
+    }
+
     /// Called with each finished MP3 and its job (the app adds it to the Files list).
     var onFinished: (URL, DownloadJob) -> Void = { _, _ in }
 
@@ -261,11 +266,15 @@ final class Downloader: ObservableObject {
             return
         }
         job.phase = .tagging
-        let loud = matchLoudness
+        let loud = matchLoudness, official = officialTags
         Task.detached(priority: .userInitiated) {
-            let result = Result { try Self.polishTags(file, matchLoudness: loud) }
+            var result = Result { try Self.polishTags(file, matchLoudness: loud) }
+            if official, case .success = result, let title = await TagLookup.fillOfficialTags(file) {
+                result = .success(title)
+            }
+            let outcome = result
             await MainActor.run {
-                switch result {
+                switch outcome {
                 case .success(let title):
                     job.title = title
                     job.phase = .done
@@ -505,6 +514,9 @@ struct DownloaderView: View {
                 .disabled(dl.toolTaskRunning || dl.brew == nil)
                 .help("Get the latest yt-dlp (fixes most download errors after YouTube changes)")
             }
+            Toggle("Official tags & cover from Apple Music (album, year, track, genre)", isOn: $dl.officialTags)
+                .toggleStyle(.switch).controlSize(.small)
+                .help("After downloading, look the song up in Apple's catalog and use its tags and high-res cover when it's a clear match. Also used by the Auto tab.")
         }
         .padding(16)
         .background(glassCard)

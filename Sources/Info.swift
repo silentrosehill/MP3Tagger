@@ -18,8 +18,11 @@ struct InfoPanel: View {
             "Drop MP3s or folders, or press +",
             "Edit title, artist, album, year, track and genre",
             "Cover: drag an image on, pick a file, or search albums and the web",
+            "✨ Official Tags: fill everything in from Apple Music",
             "Loudness: match Spotify (−14 LUFS), lossless and undoable",
-            "Save, Save As, Apply Album & Cover to All",
+            "Trim: cut a talking intro/outro (play it, click Here), no re-encoding",
+            "Save, Save As, Apply Album & Cover to All · ⌘Z undoes unsaved changes",
+            "Rename files to “Artist - Title” (under the path, or right-click)",
         ]),
         Section(tab: .history, icon: "clock.arrow.circlepath", title: "History", points: [
             "Every song you've saved, newest first",
@@ -28,7 +31,7 @@ struct InfoPanel: View {
         Section(tab: .find, icon: "wand.and.stars", title: "Auto", points: [
             "Type a song and artist to find it on YouTube",
             "Click a thumbnail to hear the first 30 seconds",
-            "Download: it's tagged, loudness-matched and opened in the editor",
+            "Download: official tags + cover, Spotify loudness, then the editor",
         ]),
         Section(tab: .download, icon: "arrow.down.circle", title: "Download (⬇︎)", points: [
             "Paste a video link, or browse YouTube in the app (with ad blocker)",
@@ -36,10 +39,12 @@ struct InfoPanel: View {
         ]),
         Section(tab: .changelog, icon: "list.bullet.rectangle.portrait", title: "Changelog", points: [
             "What changed in every version",
+            "New versions: the app checks GitHub daily, or MP3 Tagger menu → Check for Updates…",
         ]),
         Section(tab: nil, icon: "play.circle", title: "Mini player", points: [
             "Drag it anywhere; it snaps to the corners",
             "Vinyl or CD, visualizer, seek bar, volume, ✕ to close",
+            "Plays through the list: ⏮ ⏭, or Space = play/pause, ← → = previous/next",
         ]),
         Section(tab: nil, icon: "paintpalette", title: "Theme (🎨)", points: [
             "Liquid Glass or Mavericks style, vinyl or CD",

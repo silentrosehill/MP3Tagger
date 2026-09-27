@@ -12,6 +12,9 @@ SCREENSHOT CAN BE FEW VERSION BEHIND SRYYYY</3
 - Saves as ID3v2.3, the version Spotify's local files read best
 - Drag and drop songs or whole folders; Save, Save As, and Save All to a folder
 - "Apply Album & Cover to All" for tagging a whole album at once
+- ✨ Official Tags: pick the song from Apple Music's catalog to fill in everything, plus a high-res cover
+- Rename files to "Artist - Title.mp3" in one click (or all at once)
+- Undo / Redo (⌘Z) for anything you haven't saved yet
 
 **Cover art**
 - Drag an image onto the cover, or pick one from a file
@@ -23,25 +26,31 @@ SCREENSHOT CAN BE FEW VERSION BEHIND SRYYYY</3
 - "Match Spotify" sets songs to −14 LUFS, like Spotify plays them, or adjust in ±1.5 dB steps
 - Lossless (MP3Gain-style): the audio isn't re-encoded, and Reset restores the original exactly
 
+**Trim**
+- Cut a talking intro or outro: play the song, click "Here" at the right moment, preview, save
+- Lossless: whole MP3 frames are cut, nothing is re-encoded, and the length info stays correct
+
 **Playback**
 - Picture-in-picture mini player: drag it anywhere, it snaps to the corners
 - A spinning vinyl record (33⅓ RPM) or CD (real CD speed, Yeezus-style reflections) slides out from behind the cover
 - Play/pause, song position slider, slide-out volume with mute, and a ✕ to close
 - Dynamic Island-style visualizer that moves with the song's real bass, mids and treble, in the album cover's colors
+- Plays through your list: ⏮ ⏭, Space = play/pause, ← → = previous/next
 
 **Auto (find & download)**
 - Type a song and artist, and get the best YouTube matches with thumbnail, length, channel and views
 - Click a thumbnail to hear the first 30 seconds
-- Pick one: it downloads, cleans up the tags, matches Spotify loudness and opens in the editor so you can fix the cover
+- Pick one: it downloads, gets the official tags and cover from Apple Music, matches Spotify loudness and opens in the editor
 
 **Download**
 - Paste a video link and get a tagged MP3 (uses yt-dlp and ffmpeg from Homebrew; install/update from the app)
 - In-app YouTube browser with a built-in ad blocker; stays signed in
-- Automatic cover, title cleanup and optional Spotify loudness matching
+- Automatic cover, title cleanup, official tags from Apple Music and optional Spotify loudness matching
 - Downloaded songs stay in the Files list across launches
 
 **Help**
 - ⓘ button next to the theme button: what each tab does, and click one to jump there
+- The app checks GitHub for new versions once a day (or MP3 Tagger menu → Check for Updates…)
 
 **History and changelog**
 - History tab of every song you saved; click a cover to play it
