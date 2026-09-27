@@ -2,6 +2,44 @@
 
 hi i made claude make me a mac os mp3 tagger, mostly for spotify, look the screenshot to see how it looks like
 
+## Features
+
+**Tag editing**
+- Edit title, artist, album, album artist, year, track number, genre and cover art
+- Saves as ID3v2.3, the version Spotify's local files read best
+- Drag and drop songs or whole folders; Save, Save As, and Save All to a folder
+- "Apply Album & Cover to All" for tagging a whole album at once
+
+**Cover art**
+- Drag an image onto the cover, or pick one from a file
+- Built-in search: official album art from Apple's catalog, or web image search (right-click → Use as Cover Art)
+- Liquid glass "pour" animation when the cover changes
+
+**Loudness**
+- Measures loudness in LUFS (the EBU R128 / BS.1770 method)
+- "Match Spotify" sets songs to −14 LUFS, like Spotify plays them, or adjust in ±1.5 dB steps
+- Lossless (MP3Gain-style): the audio isn't re-encoded, and Reset restores the original exactly
+
+**Playback**
+- Picture-in-picture mini player: drag it anywhere, it snaps to the corners
+- A spinning vinyl record (33⅓ RPM) or CD (real CD speed, Yeezus-style reflections) slides out from behind the cover
+- Play/pause, song position slider, slide-out volume with mute, and a ✕ to close
+
+**Download**
+- Paste a video link and get a tagged MP3 (uses yt-dlp and ffmpeg from Homebrew; install/update from the app)
+- In-app YouTube browser with a built-in ad blocker; stays signed in
+- Automatic cover, title cleanup and optional Spotify loudness matching
+- Downloaded songs stay in the Files list across launches
+
+**History and changelog**
+- History tab of every song you saved; click a cover to play it
+- Changelog tab listing every version
+
+**Themes**
+- Liquid Glass style with 9 color presets, a custom color, sidebar tint, or colors that match the album cover
+- Mavericks style: an OS X 10.9-inspired skeuomorphic look with the same layout
+- Theme picker also switches the player disc between vinyl and CD
+
 ![Files](Screenshots/files.png)
 ![History](Screenshots/history.png)
 ![Download](Screenshots/download.png)
