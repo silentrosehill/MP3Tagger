@@ -5,6 +5,7 @@ hi i made claude make me a mac os mp3 tagger, mostly for spotify, look the scree
 ![Files](Screenshots/files.png)
 ![History](Screenshots/history.png)
 ![Download](Screenshots/download.png)
+![Theme and mini player](Screenshots/theme.png)
 
 ## Build and install
 
