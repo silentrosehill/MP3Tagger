@@ -39,6 +39,9 @@ ill update it regularly since its a personnal project i will always make changes
 - Automatic cover, title cleanup and optional Spotify loudness matching
 - Downloaded songs stay in the Files list across launches
 
+**Help**
+- ⓘ button next to the theme button: what each tab does, and click one to jump there
+
 **History and changelog**
 - History tab of every song you saved; click a cover to play it
 - Changelog tab listing every version

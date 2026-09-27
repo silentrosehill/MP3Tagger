@@ -24,8 +24,8 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleExecutable</key><string>MP3Tagger</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>3.12.0</string>
-  <key>CFBundleVersion</key><string>48</string>
+  <key>CFBundleShortVersionString</key><string>3.13.0</string>
+  <key>CFBundleVersion</key><string>49</string>
   <key>NSHumanReadableCopyright</key><string>Tagging, cover art, playback, loudness and downloads — built with Claude.</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>

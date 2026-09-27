@@ -2,6 +2,9 @@
 
 Version numbers: minor = a new feature, patch = a fix. The build number counts every update.
 
+## 3.13.0 (build 49)
+- New ⓘ button next to the theme button: it explains what each tab, the mini player and the theme do. Click a tab in it to jump there.
+
 ## 3.12.0 (build 48)
 - Match album cover: when no song is selected (empty Files or History, Auto, Download, Changelog), the colors follow the song playing in the mini player. They go back to your theme when you close the player.
 

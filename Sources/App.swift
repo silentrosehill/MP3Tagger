@@ -57,6 +57,7 @@ final class Library: ObservableObject {
     @Published var confirmClearHistory = false
     @Published var coverSearchOpen = false
     @Published var showThemePicker = false
+    @Published var showInfo = false
     @Published var changelogSelection: String?
     let history = HistoryStore()
 
@@ -292,6 +293,12 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigation) { AppTitle() }
             }
             ToolbarItemGroup {
+                Button { lib.showInfo.toggle() } label: { Label("Info", systemImage: "info.circle") }
+                    .help("What each tab does")
+                    .popover(isPresented: $lib.showInfo, arrowEdge: .bottom) {
+                        InfoPanel(lib: lib)
+                            .environment(\.appTheme, themeStore.rendered)
+                    }
                 Button { lib.showThemePicker.toggle() } label: { Label("Theme", systemImage: "paintpalette.fill") }
                     .help("Change the app's color")
                     .popover(isPresented: $lib.showThemePicker, arrowEdge: .bottom) {
@@ -314,6 +321,9 @@ struct ContentView: View {
             // Screenshot helpers: MP3TAGGER_PLAY=<mp3> starts a song (use with MP3TAGGER_MUTE=1), MP3TAGGER_THEME=<seconds> opens the theme picker after that delay
             let env = ProcessInfo.processInfo.environment
             if let song = env["MP3TAGGER_PLAY"], Player.testMute { Player.shared.toggle(URL(fileURLWithPath: song)) }
+            if let delay = env["MP3TAGGER_INFO"].flatMap(Double.init) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { lib.showInfo = true }
+            }
             if let delay = env["MP3TAGGER_THEME"].flatMap(Double.init) {      // seconds after launch
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { lib.showThemePicker = true }
             }
