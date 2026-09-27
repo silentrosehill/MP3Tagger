@@ -311,6 +311,12 @@ struct ContentView: View {
             themeStore.applyAppearance()
             // finished downloads land in the Files list, ready to tweak
             Downloader.shared.onFinished = { [lib] url, job in lib.downloadFinished(url, job: job) }
+            // Screenshot helpers: MP3TAGGER_PLAY=<mp3> starts a song (use with MP3TAGGER_MUTE=1), MP3TAGGER_THEME=<seconds> opens the theme picker after that delay
+            let env = ProcessInfo.processInfo.environment
+            if let song = env["MP3TAGGER_PLAY"], Player.testMute { Player.shared.toggle(URL(fileURLWithPath: song)) }
+            if let delay = env["MP3TAGGER_THEME"].flatMap(Double.init) {      // seconds after launch
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { lib.showThemePicker = true }
+            }
         }
         .environment(\.appTheme, themeStore.rendered)
         .environment(\.uiStyle, themeStore.style)

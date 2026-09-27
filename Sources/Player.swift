@@ -15,7 +15,9 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private var player: AVAudioPlayer?
 
     /// Volume lives in `PlayerVolume` so dragging the slider doesn't redraw every song row.
-    fileprivate func applyVolume(_ v: Double) { player?.volume = Float(v) }
+    fileprivate func applyVolume(_ v: Double) { player?.volume = Self.testMute ? 0 : Float(v) }
+    /// `MP3TAGGER_MUTE=1` plays silently without touching the saved volume (used for screenshots).
+    static let testMute = ProcessInfo.processInfo.environment["MP3TAGGER_MUTE"] != nil
 
     func stop() {
         player?.stop()
@@ -49,7 +51,7 @@ final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
             let p = try AVAudioPlayer(contentsOf: u)
             SongFinder.shared.stopPreview()      // one thing playing at a time
             p.delegate = self
-            p.volume = Float(PlayerVolume.shared.volume)
+            p.volume = Self.testMute ? 0 : Float(PlayerVolume.shared.volume)
             p.play()
             let tag = try? ID3.read(url: u)
             nowTitle = tag.map { $0.title.isEmpty ? u.deletingPathExtension().lastPathComponent : $0.title }
