@@ -1,0 +1,13 @@
+# Built app (run ./build.sh)
+MP3 Tagger.app/
+
+# Private notes
+HANDOFF.md
+
+# Spotify's trademarked logo, not part of this app
+Icon/spotify_glass_1024.png
+Icon/make_spotify_icon.swift
+Icon/set_icon.swift
+
+.DS_Store
+*.iconset/
