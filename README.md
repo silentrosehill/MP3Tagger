@@ -45,10 +45,19 @@ hi i made claude make me a mac os mp3 tagger, mostly for spotify, look the scree
 ![Download](Screenshots/download.png)
 ![Theme and mini player](Screenshots/theme.png)
 
+## Download
+
+Grab the zip from the [latest release](https://github.com/silentrosehill/MP3Tagger/releases/latest), unzip it and drag **MP3 Tagger** into Applications.
+Built for macOS 14 or newer, on Apple silicon and Intel Macs (tested on macOS 27).
+
+The app isn't notarized by Apple, so the first time macOS will say it can't check it. Open **System Settings → Privacy & Security**,
+scroll down and click **Open Anyway** (or run `xattr -dr com.apple.quarantine "/Applications/MP3 Tagger.app"` in Terminal).
+
 ## Build and install
 
 ```bash
-./build.sh
+./build.sh            # quick build for this Mac
+./release.sh          # universal build + zip in dist/ for a release
 ditto "MP3 Tagger.app" "/Applications/MP3 Tagger.app"
 ```
 

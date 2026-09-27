@@ -11,3 +11,6 @@ Icon/set_icon.swift
 
 .DS_Store
 *.iconset/
+
+# Release zips (./release.sh)
+dist/
