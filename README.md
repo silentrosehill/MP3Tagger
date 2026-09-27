@@ -1,6 +1,6 @@
 # MP3 Tagger
 
-hi i made claude make me a mac os mp3 tagger, mostly for spotify, look the screenshot to see how it looks like, its vibecoded asf, but i needed myself an app like that, so i made it and customized it to my liking, but im sharing it if someone finds it useful. im not taking any credit for the code. 
+hi i made claude make me a mac os mp3 tagger, mostly for spotify, look at the screenshots to see how it looks like, its vibecoded asf, but i needed myself an app like that, so i made it and customized it to my liking, but im sharing it if someone finds it useful. im not taking any credit for the code. 
 
 ## Features
 
