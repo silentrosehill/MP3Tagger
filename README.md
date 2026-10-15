@@ -70,7 +70,7 @@ SCREENSHOT CAN BE FEW VERSION BEHIND SRYYYY</3
 
 ## Download
 
-Grab the zip from the [latest release](https://github.com/silentrosehill/MP3Tagger/releases/latest), unzip it and drag **MP3 Tagger** into Applications.
+Grab **MP3-Tagger-Mac-….zip** from the [latest release](https://github.com/silentrosehill/MP3Tagger/releases/latest), unzip it and drag **MP3 Tagger** into Applications.
 Built for macOS 14 or newer, on Apple silicon and Intel Macs (tested on macOS 27).
 
 The app isn't notarized by Apple, so the first time macOS will say it can't check it. Open **System Settings → Privacy & Security**,
@@ -79,7 +79,7 @@ scroll down and click **Open Anyway** (or run `xattr -dr com.apple.quarantine "/
 ### Windows
 
 There's a Windows version too (Windows 10 and 11, same features). From the [latest release](https://github.com/silentrosehill/MP3Tagger/releases/latest),
-get **MP3-Tagger-Windows-…-Setup.exe** (installer) or **MP3-Tagger-Windows-….zip** (portable: unzip and run `MP3 Tagger.exe`).
+get **MP3-Tagger-Windows-….zip**, unzip it anywhere (for example Documents) and run **MP3 Tagger.exe** inside.
 The app isn't signed, so Windows SmartScreen may say it "protected your PC": click **More info → Run anyway**.
 For downloading, the app fetches yt-dlp and ffmpeg itself (Download tab → Install).
 
@@ -96,7 +96,7 @@ Windows version (Electron, in `Windows/`; builds on a Mac or on Windows):
 ```bash
 cd Windows && npm install
 npm start             # run it
-npm run dist          # Windows installer + zip in Windows/dist
+npm run dist          # Windows zip (and installer) in Windows/dist
 ```
 
 The Mac app needs only the Xcode Command Line Tools (`xcode-select --install`). The downloader also needs
