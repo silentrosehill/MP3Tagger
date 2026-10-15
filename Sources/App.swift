@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import WebKit
 
 @main
 struct MP3TaggerApp: App {
@@ -445,6 +446,7 @@ struct ContentView: View {
                     .popover(isPresented: $lib.showInfo, arrowEdge: .bottom) {
                         InfoPanel(lib: lib)
                             .environment(\.appTheme, themeStore.rendered)
+                            .environment(\.glassTint, themeStore.glassTint)
                     }
                 Button { lib.showThemePicker.toggle() } label: { Label("Theme", systemImage: "paintpalette.fill") }
                     .help("Change the app's color")
@@ -469,6 +471,7 @@ struct ContentView: View {
             Player.shared.queueSources[.files] = { [lib] in lib.files.map(\.url) }
             Player.shared.queueSources[.history] = { [lib] in lib.history.entries.map(\.url) }
             PlaybackKeys.install(lib: lib)
+            NowPlayingBroadcast.listen()   // KeyForge's Album Cover lighting asks what's playing
             // finished downloads land in the Files list, ready to tweak
             Downloader.shared.onFinished = { [lib] url, job in lib.downloadFinished(url, job: job) }
             // Screenshot helpers: MP3TAGGER_PLAY=<mp3> starts a song (use with MP3TAGGER_MUTE=1), MP3TAGGER_THEME=<seconds> opens the theme picker after that delay
@@ -482,6 +485,7 @@ struct ContentView: View {
             }
         }
         .environment(\.appTheme, themeStore.rendered)
+                            .environment(\.glassTint, themeStore.glassTint)
         .environment(\.uiStyle, themeStore.style)
         .tint(themeStore.rendered.accent)
         .animation(.easeInOut(duration: 0.35), value: themeStore.rendered)
@@ -575,8 +579,9 @@ struct SidebarView: View {
             } else if lib.tab == .download || lib.tab == .find {
                 DownloadsSidebar(lib: lib)
             } else if lib.tab == .files {
-                List(lib.files, selection: $lib.selection) { f in
+                List(lib.files) { f in
                     FileRow(file: f, downloaded: lib.isDownloaded(f.url), selected: lib.selection == f.id) { lib.status = $0 }
+                        .themedSelection(lib.selection == f.id) { lib.selection = f.id }
                         .contextMenu {
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([f.url]) }
                             Button("Rename from Tags") { lib.renameFromTags(f) }
@@ -597,8 +602,9 @@ struct SidebarView: View {
                     }
                 }
             } else {
-                List(history.entries, selection: $lib.historySelection) { e in
+                List(history.entries) { e in
                     HistoryRow(entry: e, selected: lib.historySelection == e.id) { lib.status = $0 }
+                        .themedSelection(lib.historySelection == e.id) { lib.historySelection = e.id }
                         .contextMenu {
                             Button("Open in Editor") { lib.openInEditor(e.url) }.disabled(!e.exists)
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([e.url]) }.disabled(!e.exists)
@@ -634,13 +640,41 @@ struct SidebarView: View {
                     .overlay(alignment: .trailing) { Rectangle().fill(Classic.sidebarEdge).frame(width: 1) }
                     .ignoresSafeArea()
             } else {
-                ZStack {
-                    VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
-                    theme.sidebarTint
-                }
-                .ignoresSafeArea()
+                theme.sidebarTint   // macOS draws the sidebar's Liquid Glass; this just tints it
+                    .ignoresSafeArea()
             }
         }
+    }
+}
+
+/// List selection in the theme colour. The system highlight always uses the macOS accent colour
+/// (blue for most people), so rows draw their own and select on click.
+private struct ThemedSelection: ViewModifier {
+    let selected: Bool
+    let select: () -> Void
+    @Environment(\.appTheme) private var theme
+    @Environment(\.uiStyle) private var style
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .onTapGesture(perform: select)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: style == .mavericks ? 5 : 10, style: .continuous)
+                    .fill(style == .mavericks
+                          ? AnyShapeStyle(LinearGradient(colors: [theme.purple.opacity(0.75), theme.purple],
+                                                         startPoint: .top, endPoint: .bottom))
+                          : AnyShapeStyle(theme.purple.opacity(0.35)))
+                    .overlay(RoundedRectangle(cornerRadius: style == .mavericks ? 5 : 10, style: .continuous)
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+                    .padding(.horizontal, 10)
+                    .opacity(selected ? 1 : 0)
+            )
+    }
+}
+
+extension View {
+    func themedSelection(_ selected: Bool, select: @escaping () -> Void) -> some View {
+        modifier(ThemedSelection(selected: selected, select: select))
     }
 }
 
@@ -747,7 +781,12 @@ struct EditorView: View {
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.purpleGlassIcon)
+                    .glassGroup()
                     Text("Click the cover to search, or drag an image onto it").font(.caption).foregroundStyle(.secondary)
+                    // Trim lives under the cover, where there's room (Loudness is on the right)
+                    TrimCard(file: file)
+                        .frame(width: 272)
+                        .padding(.top, 14)
                 }
 
                 Form {
@@ -793,8 +832,6 @@ struct EditorView: View {
 
                     LoudnessCard(file: file)
                         .padding(.top, 12)
-                    TrimCard(file: file)
-                        .padding(.top, 8)
                 }
                 .frame(maxWidth: 420)
             }
@@ -892,10 +929,23 @@ enum PlaybackKeys {
         }
     }
 
+    /// Text fields, text views and anything inside a web page (search boxes there) keep their keys.
+    private static func isTyping(_ r: NSResponder) -> Bool {
+        if r is NSText || r is NSTextField { return true }
+        var v = r as? NSView
+        while let view = v {
+            if view is WKWebView { return true }
+            v = view.superview
+        }
+        return false
+    }
+
     private static func handle(_ event: NSEvent, lib: Library) -> Bool {
         let mods = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        guard mods.isEmpty, let window = event.window, window.attachedSheet == nil, !(window is NSPanel) else { return false }
-        if let r = window.firstResponder, r is NSText || String(describing: type(of: r)).hasPrefix("WK") { return false }
+        // only the main window, never a sheet (cover search, YouTube browser…) or a panel, or while one is open
+        guard mods.isEmpty, let window = event.window, window.sheetParent == nil, window.attachedSheet == nil,
+              !(window is NSPanel) else { return false }
+        if let r = window.firstResponder, isTyping(r) { return false }
         let player = Player.shared
         switch event.keyCode {
         case 49:                                             // space

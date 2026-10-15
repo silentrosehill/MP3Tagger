@@ -141,9 +141,9 @@ struct GlassCover: View {
                     .overlay(shape.strokeBorder(Classic.panelBorder, lineWidth: 1))
             } else {
                 shape.strokeBorder(
-                    LinearGradient(colors: [.white.opacity(0.95), .white.opacity(0.15), .white.opacity(0.05), .white.opacity(0.6)],
+                    LinearGradient(colors: [.white.opacity(0.5), .white.opacity(0.08), .white.opacity(0.02), .white.opacity(0.25)],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 1.5 + 3 * sin(.pi * fx.sheen))
+                    lineWidth: 0.75 + 1.5 * sin(.pi * fx.sheen))
             }
         }
         .shadow(color: .black.opacity(targeted ? 0.35 : 0.22), radius: targeted ? 22 : 14, y: targeted ? 12 : 7)

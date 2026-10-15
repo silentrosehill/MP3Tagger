@@ -2,6 +2,37 @@
 
 Version numbers: minor = a new feature, patch = a fix. The build number counts every update.
 
+## 3.25.0 (build 64)
+- MP3 Tagger for Windows: the same app for Windows 10 and 11, with every feature: tag editing, covers, Official Tags, loudness (lossless + limiter boost), trim, the mini player with vinyl/CD and visualizer, Auto and Download, History, themes (Liquid Glass with Windows 11's Mica, and Mavericks). Installer or portable zip on the GitHub release; yt-dlp and ffmpeg install from inside the app.
+
+## 3.24.1 (build 63)
+- Fix: the selected song in Files and History is highlighted in your theme colour instead of macOS blue.
+
+## 3.24.0 (build 62)
+- Works with KeyForge: while a song plays, KeyForge's Album Cover lighting paints your keyboard in the cover's colors. MP3 Tagger only announces the song and 3 cover colors to apps on this Mac.
+
+## 3.23.0 (build 61)
+- Theme → Glass slider, like macOS's Liquid Glass Clear/Tinted setting: from Apple's clear, see-through glass to frosted glass tinted with your theme colour, with everything in between. Applies live to all glass in the app (Liquid Glass style).
+
+## 3.22.0 (build 60)
+- Liquid Glass redesign, following Apple's current style: buttons, the tab switch, the mini player and the volume pill use the real system Liquid Glass (macOS 26+; frosted fallback on older systems). Content cards are calm filled panels, controls on the mini player are plain symbols (no glass on glass), and the coloured glows are gone. Mavericks is unchanged.
+- Faster while playing: the spinning vinyl and CD are drawn once and only rotated, the CD's shimmer and the audio bars run at 30 fps, and titles scroll at 60 fps. Measured in the real app while playing: vinyl 32% → 26% CPU, CD 54% → 33%; idle stays at 0.2%, memory unchanged.
+- Fix: the mini player's close button was drawn twice on top of itself.
+
+## 3.21.0 (build 59)
+- Loudness target picker (Loudness card): Spotify −14, Loud −11, Louder −9. Match, the limiter boost and downloads all aim for it.
+- Cleaner limiter boost: works at 4× the sample rate to catch between-sample peaks (true peak −1.2 dBTP vs −0.7 before), and always starts from the saved original, so re-boosting never stacks re-encodes.
+
+## 3.20.0 (build 58)
+- Loudness: quiet songs whose peaks leave no room for a lossless boost now say how much quieter they'll play in Spotify, with a "Boost with limiter" button that brings them to −14 LUFS (like Spotify's Loud mode; re-encodes at 320 kbps, original kept, Reset restores it exactly).
+- Downloads with "Match Spotify loudness" on get the limiter boost automatically when they're still quiet after the lossless match.
+
+## 3.19.2 (build 57)
+- Fix: typing a space in the cover search (or any sheet or web page, like the YouTube browser) no longer pauses or plays the mini player. Space, ← and → only control playback in the main window when you're not typing.
+
+## 3.19.1 (build 56)
+- The Trim card now sits under the cover on the left, using the empty space there. Loudness stays on the right, so the editor is much shorter and needs no scrolling.
+
 ## 3.19.0 (build 55)
 - Undo and Redo (⌘Z / ⇧⌘Z) for changes you haven't saved yet: tags, cover, Official Tags, loudness and trim. Typing in a field counts as one step, and the Edit menu says what will be undone. Saving starts fresh.
 

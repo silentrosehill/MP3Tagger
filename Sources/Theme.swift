@@ -189,6 +189,11 @@ final class ThemeStore: ObservableObject {
         NSApplication.shared.appearance = style == .mavericks ? NSAppearance(named: .aqua) : nil
     }
 
+    /// Liquid Glass look, like macOS's Clear ↔ Tinted choice: 0 = clearest glass, 1 = frosted and tinted with the theme colour.
+    @Published var glassTint: Double = UserDefaults.standard.object(forKey: "glassTint") as? Double ?? 0.3 {
+        didSet { UserDefaults.standard.set(glassTint, forKey: "glassTint") }
+    }
+
     @Published var disc: DiscKind = DiscKind(rawValue: UserDefaults.standard.string(forKey: "discKind") ?? "") ?? .vinyl {
         didSet { UserDefaults.standard.set(disc.rawValue, forKey: "discKind") }
     }
@@ -319,6 +324,45 @@ enum Theme {
     }
 }
 
+// MARK: - Liquid Glass (Apple's system material on macOS 26+, frosted fallback before)
+
+/// Where a panel sits in Apple's layering: content cards stay calm; floating controls get Liquid Glass.
+enum PanelRole { case card, floating }
+
+private struct InsideGlassKey: EnvironmentKey { static let defaultValue = false }
+private struct GlassTintKey: EnvironmentKey { static let defaultValue = 0.3 }
+extension EnvironmentValues {
+    /// Controls placed on a glass surface draw as plain symbols (Apple avoids glass on glass).
+    var insideGlass: Bool {
+        get { self[InsideGlassKey.self] }
+        set { self[InsideGlassKey.self] = newValue }
+    }
+    /// 0 = clear glass … 1 = tinted glass (the Theme popover's Glass slider).
+    var glassTint: Double {
+        get { self[GlassTintKey.self] }
+        set { self[GlassTintKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Real Liquid Glass in `shape`, following the Clear ↔ Tinted slider. An explicit `tint` (main actions)
+    /// always wins; `interactive` makes it light up and flex under the pointer.
+    func liquidGlass<S: InsettableShape>(_ shape: S, tint: Color? = nil, interactive: Bool = false) -> some View {
+        modifier(LiquidGlass(shape: shape, tint: tint, interactive: interactive))
+    }
+
+    /// Groups neighbouring glass controls so they render together (Apple's recommendation for
+    /// performance) and can blend into each other when close.
+    @ViewBuilder
+    func glassGroup(spacing: CGFloat = 10) -> some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) { self }
+        } else {
+            self
+        }
+    }
+}
+
 /// Frosted glass capsule in the theme color. `prominent` is the saturated version for the main action.
 struct PurpleGlassButtonStyle: ButtonStyle {
     var prominent = false
@@ -328,6 +372,7 @@ struct PurpleGlassButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.appTheme) private var theme
     @Environment(\.uiStyle) private var style
+    @Environment(\.insideGlass) private var insideGlass
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
@@ -364,30 +409,76 @@ struct PurpleGlassButtonStyle: ButtonStyle {
     }
 
     private func glass(_ configuration: Configuration, pressed: Bool) -> some View {
-        configuration.label
+        let shape = Capsule()
+        return configuration.label
             .font(icon ? .system(size: iconSize * 0.4, weight: .semibold) : .callout.weight(prominent ? .semibold : .medium))
             .foregroundStyle(prominent ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .padding(.horizontal, icon ? 0 : 14)
             .padding(.vertical, icon ? 0 : 6)
             .frame(width: icon ? iconSize : nil, height: icon ? iconSize : nil)
-            .background {
+            .modifier(GlassSurface(shape: shape, tint: prominent ? theme.purple : nil,
+                                   plain: insideGlass && !prominent, pressed: pressed))
+            .scaleEffect(pressed ? 0.97 : 1)
+            .opacity(isEnabled ? 1 : 0.4)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: pressed)
+            .contentShape(shape)
+    }
+}
+
+private struct LiquidGlass<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    let interactive: Bool
+    @Environment(\.glassTint) private var amount
+    @Environment(\.appTheme) private var theme
+
+    /// The slider's tint: none at the clear end, rising (gently at first) to a clearly coloured glass at the tinted end.
+    private var effectiveTint: Color? {
+        if let tint { return tint }
+        return amount > 0.02 ? theme.purple.opacity(0.15 + 0.8 * amount * amount) : nil
+    }
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            // Apple's glass tint is deliberately faint (its "Tinted" mostly frosts), so toward the tinted end
+            // a soft wash of the theme colour sits inside the glass too — that's what makes it read as coloured.
+            content
+                .background(shape.fill(theme.purple.opacity(tint == nil ? 0.45 * amount * amount : 0)))
+                .glassEffect(glass, in: shape)
+        } else {
+            content.background {
                 ZStack {
-                    Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(LinearGradient(
-                        colors: prominent ? [theme.purple.opacity(0.9), theme.indigo.opacity(0.95)]
-                                          : [theme.purple.opacity(pressed ? 0.42 : 0.28), theme.indigo.opacity(pressed ? 0.36 : 0.22)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing))
-                    // glossy top half
-                    Capsule().fill(LinearGradient(colors: [.white.opacity(prominent ? 0.28 : 0.2), .clear],
-                                                  startPoint: .top, endPoint: .center))
+                    shape.fill(.ultraThinMaterial).opacity(0.55 + 0.45 * amount)
+                    if let t = effectiveTint { shape.fill(t.opacity(tint == nil ? 1 : 0.6)) }
                 }
+                .overlay(shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
             }
-            .overlay(Capsule().strokeBorder(Theme.rim, lineWidth: 1))
-            .shadow(color: theme.purple.opacity(prominent ? 0.45 : 0.25), radius: pressed ? 2 : 6, y: pressed ? 1 : 3)
-            .scaleEffect(pressed ? 0.96 : 1)
-            .opacity(isEnabled ? 1 : 0.45)
-            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: pressed)
-            .contentShape(Capsule())
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private var glass: Glass {
+        // Clear end uses Apple's clear variant (most see-through); from there on the frosted regular glass.
+        var g: Glass = amount < 0.15 && tint == nil ? .clear : .regular
+        if let t = effectiveTint { g = g.tint(t) }
+        if interactive { g = g.interactive() }
+        return g
+    }
+}
+
+/// A control's surface: Liquid Glass, or — on a glass panel — just a soft press highlight.
+private struct GlassSurface<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    let plain: Bool
+    let pressed: Bool
+
+    func body(content: Content) -> some View {
+        if plain {
+            content.background(shape.fill(Color.primary.opacity(pressed ? 0.14 : 0)))
+        } else {
+            content.liquidGlass(shape, tint: tint, interactive: true)
+        }
     }
 }
 
@@ -441,14 +532,9 @@ struct GlassSegmented<T: Hashable>: View {
                                                                      startPoint: .top, endPoint: .bottom), lineWidth: 1))
                                     .matchedGeometryEffect(id: "highlight", in: ns)
                             } else if on {
-                                ZStack {
-                                    Capsule().fill(LinearGradient(colors: [theme.purple.opacity(0.9), theme.indigo.opacity(0.9)],
-                                                                  startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    Capsule().fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center))
-                                }
-                                .overlay(Capsule().strokeBorder(Theme.rim, lineWidth: 1))
-                                .shadow(color: theme.purple.opacity(0.45), radius: 5, y: 2)
-                                .matchedGeometryEffect(id: "highlight", in: ns)
+                                Capsule().fill(theme.purple.opacity(0.92))
+                                    .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+                                    .matchedGeometryEffect(id: "highlight", in: ns)
                             }
                         }
                         .contentShape(Capsule())
@@ -465,34 +551,38 @@ struct GlassSegmented<T: Hashable>: View {
                     .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Classic.buttonBorder, lineWidth: 1))
                     .shadow(color: .black.opacity(0.15), radius: 0.5, y: 1)
             } else {
-                Capsule().fill(.ultraThinMaterial)
-                    .background(Capsule().fill(theme.purple.opacity(0.12)))
-                    .overlay(Capsule().strokeBorder(Theme.rim.opacity(0.6), lineWidth: 1))
+                Color.clear.liquidGlass(Capsule())
             }
         }
     }
 }
 
-/// Panel background that follows the style: frosted glass, or a light bevelled Mavericks panel
-/// (`lcd` gives the iTunes-style display used by the mini player).
-struct StyledPanel<Glass: View>: View {
+/// Panel background that follows the style and Apple's layering: content cards get a calm filled
+/// rounded rect; floating controls (mini player, volume pill) get Liquid Glass. Mavericks draws bevelled
+/// panels (`lcd` = the iTunes-style display used by the mini player).
+struct StyledPanel: View {
     let cornerRadius: CGFloat
+    var role: PanelRole = .card
     var lcd = false
-    @ViewBuilder let glass: () -> Glass
     @Environment(\.uiStyle) private var style
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if style == .mavericks {
-            let shape = RoundedRectangle(cornerRadius: min(cornerRadius, 8), style: .continuous)
-            shape
+            let classic = RoundedRectangle(cornerRadius: min(cornerRadius, 8), style: .continuous)
+            classic
                 .fill(LinearGradient(colors: lcd ? [Classic.lcdTop, Classic.lcdBottom] : [Classic.panelTop, Classic.panelBottom],
                                      startPoint: .top, endPoint: .bottom))
-                .overlay(shape.strokeBorder(lcd ? Classic.lcdBorder : Classic.panelBorder, lineWidth: 1))
-                .overlay(shape.inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.9), .clear],
-                                                                  startPoint: .top, endPoint: .center), lineWidth: 1))
+                .overlay(classic.strokeBorder(lcd ? Classic.lcdBorder : Classic.panelBorder, lineWidth: 1))
+                .overlay(classic.inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.9), .clear],
+                                                                    startPoint: .top, endPoint: .center), lineWidth: 1))
                 .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+        } else if role == .floating {
+            Color.clear.liquidGlass(shape)
         } else {
-            glass()
+            shape.fill(Color.primary.opacity(0.05))
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.5))
         }
     }
 }
@@ -513,6 +603,19 @@ struct ThemePicker: View {
                 if store.style == .mavericks {
                     Text("Classic OS X 10.9 look: Aqua buttons, light panels. Colors below apply to Liquid Glass.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if store.style == .glass {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Glass").font(.subheadline).foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Text("Clear").font(.caption).foregroundStyle(.secondary)
+                        Slider(value: $store.glassTint, in: 0...1)
+                            .controlSize(.small)
+                            .help("How the app's Liquid Glass looks: clear and see-through, or frosted and tinted with your colour")
+                        Text("Tinted").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -588,6 +691,7 @@ struct ThemePicker: View {
         .padding(16)
         .frame(width: 262)
         .environment(\.appTheme, store.rendered)
+        .environment(\.glassTint, store.glassTint)
         .environment(\.uiStyle, store.style)
         .tint(store.rendered.accent)
     }

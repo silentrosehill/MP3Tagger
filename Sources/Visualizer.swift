@@ -144,7 +144,8 @@ struct AudioBars: View {
     private let order = [2, 0, 1, 3, 5, 4]   // mix the bands a little, like the iPhone's, instead of a strict low→high ramp
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 60, paused: !playing)) { _ in
+        // The spectrum itself is sampled at 30 fps (Spectrum.fps), so drawing faster adds cost, not detail.
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !playing)) { _ in
             let t = Player.shared.currentTime
             HStack(alignment: .center, spacing: gap) {
                 ForEach(0..<Spectrum.bands, id: \.self) { i in
@@ -156,7 +157,6 @@ struct AudioBars: View {
             .frame(height: height)
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: playing)
-        .shadow(color: (model.colors.first ?? .clear).opacity(playing ? 0.55 : 0), radius: 4)
         .accessibilityHidden(true)
     }
 

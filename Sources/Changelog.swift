@@ -130,14 +130,7 @@ struct ChangelogView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            StyledPanel(cornerRadius: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(LinearGradient(colors: [theme.purple.opacity(current ? 0.22 : 0.1), theme.indigo.opacity(current ? 0.24 : 0.12)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-            }
+            StyledPanel(cornerRadius: 14)
         }
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(selected ? AnyShapeStyle(theme.accent) : AnyShapeStyle(Theme.rim.opacity(0.6)), lineWidth: selected ? 2 : 1))

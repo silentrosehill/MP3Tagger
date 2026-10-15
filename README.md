@@ -76,6 +76,13 @@ Built for macOS 14 or newer, on Apple silicon and Intel Macs (tested on macOS 27
 The app isn't notarized by Apple, so the first time macOS will say it can't check it. Open **System Settings → Privacy & Security**,
 scroll down and click **Open Anyway** (or run `xattr -dr com.apple.quarantine "/Applications/MP3 Tagger.app"` in Terminal).
 
+### Windows
+
+There's a Windows version too (Windows 10 and 11, same features). From the [latest release](https://github.com/silentrosehill/MP3Tagger/releases/latest),
+get **MP3-Tagger-Windows-…-Setup.exe** (installer) or **MP3-Tagger-Windows-….zip** (portable: unzip and run `MP3 Tagger.exe`).
+The app isn't signed, so Windows SmartScreen may say it "protected your PC": click **More info → Run anyway**.
+For downloading, the app fetches yt-dlp and ffmpeg itself (Download tab → Install).
+
 ## Build and install
 
 ```bash
@@ -84,11 +91,20 @@ scroll down and click **Open Anyway** (or run `xattr -dr com.apple.quarantine "/
 ditto "MP3 Tagger.app" "/Applications/MP3 Tagger.app"
 ```
 
-Needs only the Xcode Command Line Tools (`xcode-select --install`). The downloader also needs
+Windows version (Electron, in `Windows/`; builds on a Mac or on Windows):
+
+```bash
+cd Windows && npm install
+npm start             # run it
+npm run dist          # Windows installer + zip in Windows/dist
+```
+
+The Mac app needs only the Xcode Command Line Tools (`xcode-select --install`). The downloader also needs
 `yt-dlp` and `ffmpeg` (`brew install yt-dlp ffmpeg`, or the Install button in the app's Download tab).
 
 ## Layout
 
 - `Sources/` — the app (SwiftUI). `ID3.swift` reads/writes tags, `Loudness.swift` measures and adjusts volume.
 - `Icon/` — icon drawing scripts (`make_icon_v3.swift` is the current icon) and the `.icns` files.
+- `Windows/` — the Windows app: `src/main` (files, tags, loudness, downloads), `src/renderer` (the interface).
 - `CHANGELOG.md` — every version; bundled into the app's Changelog tab.

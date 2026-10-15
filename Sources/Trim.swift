@@ -179,32 +179,25 @@ struct TrimCard: View {
         }
         .padding(14)
         .background {
-            StyledPanel(cornerRadius: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(LinearGradient(colors: [theme.purple.opacity(0.12), theme.indigo.opacity(0.14)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.rim.opacity(0.6), lineWidth: 1))
-            }
+            StyledPanel(cornerRadius: 14)
         }
         .onAppear { length.measure(file.url) }
         .onChange(of: file.url) { _, u in length.measure(u) }
     }
 
     private func row(_ label: String, value: Double, set: @escaping (Double) -> Void) -> some View {
-        HStack(spacing: 6) {
-            Text(label).frame(width: 36, alignment: .leading)
+        HStack(spacing: 4) {
+            Text(label).frame(width: 34, alignment: .leading)
             Button { set(value - 0.5); refreshDirty() } label: { Image(systemName: "minus") }
                 .buttonStyle(.purpleGlassIcon(22)).help("0.5 s earlier")
             Text(String(format: "%@.%d", PlayerProgressFormat.string(value.rounded(.down)), Int((value * 10).rounded(.down)) % 10))
-                .font(.callout.monospacedDigit()).frame(width: 52)
+                .font(.callout.monospacedDigit()).frame(width: 50)
             Button { set(value + 0.5); refreshDirty() } label: { Image(systemName: "plus") }
                 .buttonStyle(.purpleGlassIcon(22)).help("0.5 s later")
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
             Button("Here") { set(progress.current); refreshDirty() }
                 .buttonStyle(.purpleGlass).controlSize(.small)
+                .fixedSize()
                 .disabled(!loaded)
                 .help(loaded ? "Use the current playback position" : "Play this song first, then click at the right moment")
             Button { preview(from: label == "Start" ? value : max(file.trimStart, value - 4)) } label: { Image(systemName: "play.fill") }

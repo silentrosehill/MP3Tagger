@@ -279,15 +279,7 @@ struct FindView: View {
     }
 
     private var card: some View {
-        StyledPanel(cornerRadius: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(colors: [theme.purple.opacity(0.14), theme.indigo.opacity(0.16)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-            }
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.rim.opacity(0.7), lineWidth: 1))
-        }
+        StyledPanel(cornerRadius: 16)
     }
 }
 

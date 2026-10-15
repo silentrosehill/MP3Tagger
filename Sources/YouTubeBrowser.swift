@@ -279,6 +279,7 @@ struct YouTubeBrowserView: View {
         }
         .frame(minWidth: 980, idealWidth: 1100, minHeight: 680, idealHeight: 780)
         .environment(\.appTheme, ThemeStore.shared.rendered)
+        .environment(\.glassTint, ThemeStore.shared.glassTint)
         .environment(\.uiStyle, ThemeStore.shared.style)
         .tint(ThemeStore.shared.rendered.accent)
     }

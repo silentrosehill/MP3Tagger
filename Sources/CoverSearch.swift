@@ -279,6 +279,7 @@ struct CoverSearchView: View {
         }
         .frame(minWidth: 900, idealWidth: 1000, minHeight: 620, idealHeight: 720)
         .environment(\.appTheme, ThemeStore.shared.rendered)
+        .environment(\.glassTint, ThemeStore.shared.glassTint)
         .environment(\.uiStyle, ThemeStore.shared.style)
         .tint(ThemeStore.shared.rendered.accent)
         .onAppear { model.search() }

@@ -267,8 +267,9 @@ final class Downloader: ObservableObject {
         }
         job.phase = .tagging
         let loud = matchLoudness, official = officialTags
+        let ff = ffmpeg
         Task.detached(priority: .userInitiated) {
-            var result = Result { try Self.polishTags(file, matchLoudness: loud) }
+            var result = Result { try Self.polishTags(file, matchLoudness: loud, ffmpeg: ff) }
             if official, case .success = result, let title = await TagLookup.fillOfficialTags(file) {
                 result = .success(title)
             }
@@ -304,7 +305,7 @@ final class Downloader: ObservableObject {
 
     /// Square cover, "Artist - Title (Official Video)" → artist + clean title, optional Spotify-level loudness,
     /// and ID3 v2.3 for Spotify.
-    nonisolated static func polishTags(_ file: URL, matchLoudness: Bool = false) throws -> String {
+    nonisolated static func polishTags(_ file: URL, matchLoudness: Bool = false, ffmpeg: URL? = nil) throws -> String {
         var tag = try ID3.read(url: file)
         var title = tag.title.isEmpty ? file.deletingPathExtension().lastPathComponent : tag.title
         let noise = #"\s*[\(\[][^\)\]]*\b(official|lyrics?|audio|video|visuali[sz]er|hd|hq|4k|mv|m/v)\b[^\)\]]*[\)\]]"#
@@ -328,6 +329,10 @@ final class Downloader: ObservableObject {
             tag.gainSteps += delta
         }
         try ID3.write(tag, from: file, to: file, gainDelta: delta)
+        // Still quiet after the lossless match (its peaks left no room)? Boost it with a limiter like Spotify's Loud mode.
+        if matchLoudness, let ffmpeg, let r = try? Loudness.measure(file), r.lufs < Loudness.target - 1 {
+            _ = try? Loudness.limiterBoost(file, ffmpeg: ffmpeg)
+        }
         return tag.title
     }
 }
@@ -498,7 +503,7 @@ struct DownloaderView: View {
                     ForEach(Downloader.Quality.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .fixedSize()
-                Toggle("Match Spotify loudness", isOn: $dl.matchLoudness)
+                Toggle("Match loudness target", isOn: $dl.matchLoudness)
                     .toggleStyle(.switch).controlSize(.small)
                     .help("Boost quiet downloads to Spotify's level (lossless)")
                 Button { dl.chooseFolder() } label: {
@@ -569,15 +574,7 @@ struct DownloaderView: View {
     }
 
     private var glassCard: some View {
-        StyledPanel(cornerRadius: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(colors: [theme.purple.opacity(0.14), theme.indigo.opacity(0.16)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-            }
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.rim.opacity(0.7), lineWidth: 1))
-        }
+        StyledPanel(cornerRadius: 16)
     }
 }
 

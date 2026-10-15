@@ -6,8 +6,8 @@ import AVFoundation
 final class Player: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = Player()
 
-    @Published private(set) var url: URL?
-    @Published private(set) var isPlaying = false
+    @Published private(set) var url: URL? { didSet { NowPlayingBroadcast.post() } }
+    @Published private(set) var isPlaying = false { didSet { NowPlayingBroadcast.post() } }
     /// Info about the current song, for the Now Playing bar.
     @Published private(set) var nowTitle = ""
     @Published private(set) var nowArtist = ""
@@ -208,17 +208,16 @@ struct PlayableThumb: View {
             ZStack {
                 CoverThumb(data: data, size: size)
                 if hover.on || current {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay(Circle().fill(style == .mavericks
-                            ? LinearGradient(colors: [Classic.c(0x5C5C5C), Classic.c(0x1C1C1C)], startPoint: .top, endPoint: .bottom)
-                            : LinearGradient(colors: [theme.purple.opacity(0.55), theme.indigo.opacity(0.6)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing)))
-                        .overlay(Circle().strokeBorder(
-                            LinearGradient(colors: [.white.opacity(0.8), .white.opacity(0.1)],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.75))
-                        .frame(width: size * 0.7, height: size * 0.7)
-                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    Group {
+                        if style == .mavericks {
+                            Circle()
+                                .fill(LinearGradient(colors: [Classic.c(0x5C5C5C), Classic.c(0x1C1C1C)], startPoint: .top, endPoint: .bottom))
+                                .overlay(Circle().strokeBorder(.white.opacity(0.5), lineWidth: 0.75))
+                        } else {
+                            Color.clear.liquidGlass(Circle(), tint: theme.purple.opacity(0.35))
+                        }
+                    }
+                    .frame(width: size * 0.7, height: size * 0.7)
                     Group {
                         if playing && !hover.on {
                             Image(systemName: "speaker.wave.2.fill")
@@ -363,15 +362,7 @@ struct NowPlayingBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background {
-            StyledPanel(cornerRadius: 16) {
-                ZStack {
-                    Capsule().fill(.ultraThinMaterial)
-                    Capsule().fill(Color.black.opacity(0.45))  // solid enough to hide the title behind it
-                    Capsule().fill(LinearGradient(colors: [theme.purple.opacity(0.55), theme.indigo.opacity(0.6)],
-                                                  startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                .overlay(Capsule().strokeBorder(Theme.rim, lineWidth: 1))
-            }
+            StyledPanel(cornerRadius: 16, role: .floating)
         }
         .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
         .fixedSize()
@@ -483,49 +474,26 @@ struct NowPlayingBar: View {
                     .buttonStyle(.purpleGlassIcon(26))
                     .animation(.spring(response: 0.35, dampingFraction: 0.78), value: pip.volumeOpen)
                 }
+                .environment(\.insideGlass, true)   // controls on glass draw as plain symbols
                 .padding(12)
                 .background {
-                    StyledPanel(cornerRadius: 16, lcd: true) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
-                            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(
-                                colors: [theme.purple.opacity(0.28), theme.indigo.opacity(0.32)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                        }
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.rim, lineWidth: 1))
-                    }
+                    StyledPanel(cornerRadius: 22, role: .floating, lcd: true)
                 }
                 .overlay(alignment: .topTrailing) {
                     // Close: stops the song and hides the mini player
                     Button { player.stop() } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
+                            .foregroundStyle(.secondary)
                             .frame(width: 18, height: 18)
-                            .background(Circle().fill(.black.opacity(0.3)))
-                            .overlay(Circle().strokeBorder(Theme.rim, lineWidth: 0.8))
+                            .background(Circle().fill(Color.primary.opacity(0.1)))
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .help("Close the player")
                     .padding(8)
                 }
-                .overlay(alignment: .topTrailing) {
-                    // Close: stops the song and hides the mini player
-                    Button { player.stop() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .frame(width: 18, height: 18)
-                            .background(Circle().fill(.black.opacity(0.3)))
-                            .overlay(Circle().strokeBorder(Theme.rim, lineWidth: 0.8))
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Close the player")
-                    .padding(8)
-                }
-                .shadow(color: style == .mavericks ? .black.opacity(0.25) : theme.purple.opacity(0.3), radius: 10, y: 4)
+                .shadow(color: .black.opacity(style == .mavericks ? 0.25 : 0.12), radius: 10, y: 4)
             }
         }
         .frame(width: 400)
@@ -561,7 +529,7 @@ struct MarqueeText: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .leading) {
                 if scrolling {
-                    TimelineView(.animation) { ctx in
+                    TimelineView(.animation(minimumInterval: 1 / 60)) { ctx in
                         let distance = Double(m.textWidth + gap)
                         let cycle = max(ctx.date.timeIntervalSince(m.start), 0).truncatingRemainder(dividingBy: distance / speed + pause)
                         let offset = cycle < pause ? 0 : (cycle - pause) * speed
@@ -595,22 +563,14 @@ struct MarqueeText: View {
 
 /// A vinyl record: grooves, the song's cover as the centre label, and a fixed light reflection.
 /// Spins at 33⅓ RPM in step with the song's position, so it stops when paused and jumps when you skip.
-struct VinylDisc: View {
+/// The record itself (grooves + cover label), flattened into one layer so spinning it is just a rotation.
+private struct VinylFace: View, Equatable {
     let label: Data?
     let size: CGFloat
-    let spinning: Bool
-    @Environment(\.appTheme) private var theme
+    let pink: Color
+    let purple: Color
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: nil, paused: !spinning)) { _ in
-            record.rotationEffect(.degrees(Player.shared.currentTime * 200))  // 33⅓ RPM = 200°/s
-        }
-        .overlay(reflection)
-        .frame(width: size, height: size)
-        .shadow(color: .black.opacity(0.4), radius: 3, x: 1, y: 1)
-    }
-
-    private var record: some View {
         ZStack {
             Circle().fill(RadialGradient(colors: [Color(white: 0.13), Color(white: 0.04)], center: .center,
                                          startRadius: 0, endRadius: size / 2))
@@ -622,14 +582,35 @@ struct VinylDisc: View {
                 if let label, let img = CoverImageCache.image(for: label, points: size * 0.38) {
                     Image(nsImage: img).resizable().scaledToFill()
                 } else {
-                    LinearGradient(colors: [theme.pink, theme.purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [pink, purple], startPoint: .topLeading, endPoint: .bottomTrailing)
                 }
             }
             .frame(width: size * 0.38, height: size * 0.38)
             .clipShape(Circle())
             Circle().fill(Color(white: 0.05)).frame(width: 4, height: 4)  // spindle hole
         }
+        .frame(width: size, height: size)
+        .drawingGroup()
     }
+}
+
+struct VinylDisc: View {
+    let label: Data?
+    let size: CGFloat
+    let spinning: Bool
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        // Only the angle changes per frame; the face is a separate, flattened view that SwiftUI doesn't rebuild.
+        TimelineView(.animation(minimumInterval: 1 / 60, paused: !spinning)) { _ in
+            VinylFace(label: label, size: size, pink: theme.pink, purple: theme.purple)
+                .rotationEffect(.degrees(Player.shared.currentTime * 200))  // 33⅓ RPM = 200°/s
+        }
+        .overlay(reflection)
+        .frame(width: size, height: size)
+        .shadow(color: .black.opacity(0.4), radius: 3, x: 1, y: 1)
+    }
+
 
     /// Stays still while the record turns underneath, like light on a real disc.
     private var reflection: some View {
@@ -652,14 +633,14 @@ struct CompactDisc: View {
     private var data: CGFloat { size * 0.38 }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: nil, paused: !spinning)) { _ in
+        // A real CD turns ~500 RPM — far too fast to follow — and its shimmer drifts slowly, so 30 fps is enough.
+        // The silver base and the turning print/hub are drawn once; per frame only the reflections change.
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !spinning)) { _ in
             let t = Player.shared.currentTime
-            let spin = Self.spinAngle(at: t)
             ZStack {
                 silver
                 reflections(t)
-                turningDetails.rotationEffect(.degrees(spin))
-                hubRing.rotationEffect(.degrees(spin))
+                spinningParts.rotationEffect(.degrees(Self.spinAngle(at: t)))
             }
             .mask(holeMask)
         }
@@ -739,6 +720,13 @@ struct CompactDisc: View {
              .init(color: color.opacity(0), location: at + w)]
         }
         return [.init(color: color.opacity(0), location: 0)] + lobe(0.25) + lobe(0.75) + [.init(color: color.opacity(0), location: 1)]
+    }
+
+    /// Print ring + hub, flattened once; spinning them is just a rotation.
+    private var spinningParts: some View {
+        ZStack { turningDetails; hubRing }
+            .frame(width: size, height: size)
+            .drawingGroup()
     }
 
     /// Things printed/pressed into the disc, so the turning is visible: faint track rings and the

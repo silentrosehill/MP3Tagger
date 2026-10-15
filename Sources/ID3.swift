@@ -14,6 +14,10 @@ struct ID3Tag {
     var coverMime = "image/jpeg"
     /// Total lossless volume change applied by MP3 Tagger, in 1.5 dB steps (stored as TXXX "MP3TAGGER_GAIN").
     var gainSteps = 0
+    /// Boost applied with a limiter (re-encoded), in dB; 0 if none (TXXX "MP3TAGGER_LIMITER").
+    var limiterDB = 0.0
+    /// Path of the untouched original kept for Reset after a limiter boost (TXXX "MP3TAGGER_ORIGINAL").
+    var originalBackup = ""
 
     /// Frames from an existing v2.3 tag that we don't edit; kept as-is on save.
     var otherFrames: [(id: String, body: Data)] = []
@@ -74,6 +78,10 @@ enum ID3 {
             case "TCON": tag.genre = cleanGenre(text(fbody))
             case "TXXX" where Self.txxx(fbody)?.0 == "MP3TAGGER_GAIN":
                 tag.gainSteps = Int(Self.txxx(fbody)?.1 ?? "") ?? 0
+            case "TXXX" where Self.txxx(fbody)?.0 == "MP3TAGGER_LIMITER":
+                tag.limiterDB = Double(Self.txxx(fbody)?.1 ?? "") ?? 0
+            case "TXXX" where Self.txxx(fbody)?.0 == "MP3TAGGER_ORIGINAL":
+                tag.originalBackup = Self.txxx(fbody)?.1 ?? ""
             case "APIC", "PIC":
                 if let (mime, img, type) = picture(fbody, v22: major == 2), tag.cover == nil || type == 3 {
                     tag.cover = img
@@ -213,12 +221,15 @@ enum ID3 {
         addText("TYER", tag.year)
         addText("TRCK", tag.track)
         addText("TCON", tag.genre)
-        if tag.gainSteps != 0 {
-            var b = Data([0x00])
-            b.append(contentsOf: Array("MP3TAGGER_GAIN".utf8)); b.append(0)
-            b.append(contentsOf: Array(String(tag.gainSteps).utf8))
+        func addTXXX(_ desc: String, _ value: String) {
+            var b = Data([0x03])  // UTF-8, so file paths with accents survive
+            b.append(contentsOf: Array(desc.utf8)); b.append(0)
+            b.append(contentsOf: Array(value.utf8))
             frames.append(frame("TXXX", b))
         }
+        if tag.gainSteps != 0 { addTXXX("MP3TAGGER_GAIN", String(tag.gainSteps)) }
+        if tag.limiterDB != 0 { addTXXX("MP3TAGGER_LIMITER", String(format: "%.1f", tag.limiterDB)) }
+        if !tag.originalBackup.isEmpty { addTXXX("MP3TAGGER_ORIGINAL", tag.originalBackup) }
         if let img = tag.cover {
             var b = Data([0x00])                        // Latin-1 description
             b.append(contentsOf: Array(tag.coverMime.utf8)); b.append(0)

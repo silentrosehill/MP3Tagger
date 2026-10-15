@@ -7,6 +7,12 @@ import Accelerate
 enum Loudness {
     /// Spotify's default playback loudness.
     static let spotifyTarget = -14.0
+    /// Loudness targets the user can pick (app-wide): Spotify's Normal, Spotify's Loud, and louder still.
+    static let targets: [(lufs: Double, name: String)] = [(-14, "Spotify"), (-11, "Loud"), (-9, "Louder")]
+    /// The chosen target (LUFS), used by Match, the limiter boost and downloads.
+    static var target: Double {
+        UserDefaults.standard.object(forKey: "loudnessTarget") as? Double ?? spotifyTarget
+    }
     /// One MP3 global-gain step.
     static let stepDB = 1.5
     /// Keep sample peaks at least this far below full scale when boosting.
@@ -154,9 +160,108 @@ enum Loudness {
         }
     }
 
+    // MARK: Limiter boost (for quiet songs whose peaks leave no room for a lossless boost)
+
+    /// Peak ceiling for the limiter, ≈ −1.4 dBFS: Spotify leaves 1 dB for lossy files, plus margin for MP3 encoder overshoot.
+    static let limiterCeiling = 0.85
+
+    /// Where untouched originals are kept so Reset can undo a limiter boost.
+    static var backupsDirectory: URL {
+        if let o = ProcessInfo.processInfo.environment["MP3TAGGER_BACKUPS"] { return URL(fileURLWithPath: o, isDirectory: true) }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MP3 Tagger/Originals", isDirectory: true)
+    }
+
+    struct BoostError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    /// Loudness the song would reach with the best lossless (no-distortion) boost.
+    static func losslessReach(_ r: Result) -> Double { r.lufs + Double(recommendedSteps(for: r).steps) * stepDB }
+
+    /// Raises a quiet song to Spotify's level like Spotify's own "Loud" mode does: apply the gain, and let a
+    /// limiter hold back only the loudest peaks. Re-encodes once at 320 kbps. The first original is kept in
+    /// `backupsDirectory` (and linked in the tags) so `restoreOriginal` can undo it exactly.
+    /// Returns the tag now in the file.
+    @discardableResult
+    nonisolated static func limiterBoost(_ url: URL, ffmpeg: URL, target: Double = Loudness.target) throws -> ID3Tag {
+        var tag = try ID3.read(url: url)
+        let fm = FileManager.default
+        let hasBackup = !tag.originalBackup.isEmpty && fm.fileExists(atPath: tag.originalBackup)
+
+        // Always work from the untouched original, so re-boosting to another target never stacks re-encodes.
+        let source = hasBackup ? URL(fileURLWithPath: tag.originalBackup) : url
+        let before = try measure(source)
+        guard before.lufs < target - 0.3 else {
+            return hasBackup ? try restoreOriginal(url, keeping: tag) : tag   // original is already loud enough
+        }
+        if !hasBackup {
+            try fm.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
+            let backup = backupsDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
+            try fm.copyItem(at: url, to: backup)
+            tag.originalBackup = backup.path
+        }
+
+        // Limit at 4× the sample rate so it also catches the peaks that fall *between* samples
+        // (they're what crackle after MP3 encoding), then come back down to the song's own rate.
+        let sr = Int((try? AVAudioFile(forReading: source).fileFormat.sampleRate) ?? 44100)
+        let tmp = fm.temporaryDirectory.appendingPathComponent("mp3tagger-boost-\(UUID().uuidString).mp3")
+        defer { try? fm.removeItem(at: tmp) }
+        var gain = target - before.lufs
+        for attempt in 0..<3 {
+            let chain = String(format: "aresample=%d,volume=%.2fdB,alimiter=limit=%.3f:attack=5:release=80:level=0,aresample=%d",
+                               sr * 4, gain, limiterCeiling, sr)
+            try runFFmpeg(ffmpeg, [
+                "-y", "-hide_banner", "-loglevel", "error", "-i", source.path, "-map", "0:a:0", "-map_metadata", "-1",
+                "-af", chain, "-c:a", "libmp3lame", "-b:a", "320k", "-ar", String(sr),
+                "-id3v2_version", "0", "-write_id3v1", "0", tmp.path])
+            let miss = target - (try measure(tmp)).lufs
+            if abs(miss) <= 0.3 || attempt == 2 { break }
+            gain += miss   // the limiter shaved off some loudness; add it back
+        }
+
+        tag.limiterDB = (gain * 10).rounded() / 10   // total, measured from the original
+        tag.gainSteps = 0
+        try ID3.write(tag, from: tmp, to: url)
+        return tag
+    }
+
+    /// Undoes a limiter boost: puts the kept original audio back under the song's current tags.
+    @discardableResult
+    nonisolated static func restoreOriginal(_ url: URL, keeping current: ID3Tag) throws -> ID3Tag {
+        let backup = URL(fileURLWithPath: current.originalBackup)
+        guard !current.originalBackup.isEmpty, FileManager.default.fileExists(atPath: backup.path) else {
+            throw BoostError(message: "The original copy of this song is missing, so it can't be restored.")
+        }
+        let original = try ID3.read(url: backup)
+        var tag = current
+        tag.limiterDB = 0
+        tag.originalBackup = ""
+        tag.gainSteps = original.gainSteps   // the audio coming back carries the original's lossless gain
+        try ID3.write(tag, from: backup, to: url)
+        try? FileManager.default.removeItem(at: backup)
+        return tag
+    }
+
+    private nonisolated static func runFFmpeg(_ ffmpeg: URL, _ args: [String]) throws {
+        let p = Process()
+        p.executableURL = ffmpeg
+        p.arguments = args
+        let err = Pipe()
+        p.standardError = err
+        p.standardOutput = FileHandle.nullDevice
+        try p.run()
+        let msg = err.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else {
+            throw BoostError(message: "ffmpeg failed: " + String(decoding: msg, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
     /// Gain steps (1.5 dB each) that bring `r` to Spotify's level, capped so peaks stay below the ceiling.
     static func recommendedSteps(for r: Result) -> (steps: Int, limited: Bool) {
-        let wanted = Int(((spotifyTarget - r.lufs) / stepDB).rounded())
+        let wanted = Int(((target - r.lufs) / stepDB).rounded())
         guard wanted > 0 else { return (wanted, false) }
         let headroom = max(Int(floor((peakCeilingDB - r.peakDB) / stepDB)), 0)
         return wanted > headroom ? (headroom, true) : (wanted, false)
@@ -284,12 +389,23 @@ enum Loudness {
 
 import SwiftUI
 
+/// App-wide loudness target picked in the Loudness card.
+@MainActor
+final class LoudnessSettings: ObservableObject {
+    static let shared = LoudnessSettings()
+    @Published var target: Double = Loudness.target {
+        didSet { UserDefaults.standard.set(target, forKey: "loudnessTarget") }
+    }
+}
+
 @MainActor
 final class LoudnessAnalysis: ObservableObject {
     @Published var result: Loudness.Result?
     @Published var measuring = false
     @Published var failed = false
     @Published var limited = false
+    @Published var boosting = false
+    @Published var boostError: String?
     private var generation = 0
 
     func analyze(_ url: URL) {
@@ -313,6 +429,7 @@ final class LoudnessAnalysis: ObservableObject {
 struct LoudnessCard: View {
     @ObservedObject var file: TrackFile
     @StateObject private var analysis = LoudnessAnalysis()
+    @ObservedObject private var settings = LoudnessSettings.shared
     @Environment(\.appTheme) private var theme
 
     private let low = -30.0, high = -6.0
@@ -329,13 +446,21 @@ struct LoudnessCard: View {
                 let pending = Double(file.tag.gainSteps - file.savedGain) * Loudness.stepDB
                 let now = r.lufs + pending
                 meter(now)
-                Text("\(fmt(now)) LUFS\(pending != 0 ? " after saving" : "") · Spotify plays at −14 LUFS")
+                Text("\(fmt(now)) LUFS\(pending != 0 ? " after saving" : "") · target \(fmt(settings.target))\(settings.target != Loudness.spotifyTarget ? " (Spotify plays at −14)" : "")")
                     .font(.callout).foregroundStyle(.secondary)
 
                 HStack(spacing: 8) {
-                    Button("Match Spotify") { match(r) }
+                    Text("Target").font(.callout).foregroundStyle(.secondary)
+                    GlassSegmented(selection: $settings.target,
+                                   options: Loudness.targets.map { ($0.lufs, "\($0.name) \(fmt($0.lufs))") })
+                        .fixedSize()
+                        .help("How loud Match and Boost aim for. Spotify's own songs play at −14 (Normal) or −11 (Loud).")
+                }
+
+                HStack(spacing: 8) {
+                    Button("Match") { match(r) }
                         .buttonStyle(.purpleGlassProminent)
-                        .help("Set the boost that brings this song to Spotify's loudness")
+                        .help("Set the lossless boost that brings this song to the target (as far as its peaks allow)")
                     Button { change(-1) } label: { Label("Quieter", systemImage: "minus") }
                         .help("−1.5 dB")
                     Text(boostText).font(.callout.monospacedDigit()).frame(minWidth: 70)
@@ -343,20 +468,54 @@ struct LoudnessCard: View {
                         .help("+1.5 dB")
                     Button { reset() } label: { Label("Reset", systemImage: "arrow.uturn.backward") }
                         .help("Back to the original volume")
-                        .disabled(file.tag.gainSteps == 0)
+                        .disabled(file.tag.gainSteps == 0 && file.tag.limiterDB == 0)
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.purpleGlassIcon(30))
+                .glassGroup()
 
-                if r.peakDB + pending > Loudness.peakCeilingDB + 0.01 && pending > 0 {
+                let boosted = file.tag.limiterDB != 0
+                let reach = Loudness.losslessReach(r)
+                let offTarget = boosted ? abs(r.lufs - settings.target) > 1 : reach < settings.target - 1
+                if boosted {
+                    Label(String(format: "Boosted +%.1f dB with a limiter. Reset brings back the original.", file.tag.limiterDB),
+                          systemImage: "waveform.badge.plus")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if offTarget {
+                    if !boosted {
+                        // Peaks leave no room: lossless can't reach the target without distortion.
+                        Label(String(format: "About %.0f dB under the target — its peaks leave no room for a lossless boost.",
+                                     settings.target - reach), systemImage: "speaker.slash")
+                            .font(.caption).foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: 8) {
+                        Button { boostWithLimiter() } label: {
+                            if analysis.boosting { ProgressView().controlSize(.small) }
+                            else { Text(boosted ? "Re-boost to \(fmt(settings.target))" : "Boost to \(fmt(settings.target)) with limiter") }
+                        }
+                        .buttonStyle(.purpleGlass)
+                        .disabled(analysis.boosting || Downloader.shared.ffmpeg == nil)
+                        .help(Downloader.shared.ffmpeg == nil
+                              ? "Needs ffmpeg — set it up in the Download tab"
+                              : "Raise it to the target and gently limit only the loudest peaks (like Spotify's Loud mode). Re-encodes once at 320 kbps from the original, which is kept.")
+                        Text("Re-encodes at 320 kbps · original kept").font(.caption2).foregroundStyle(.tertiary)
+                    }
+                } else if r.peakDB + pending > Loudness.peakCeilingDB + 0.01 && pending > 0 {
                     Label("This much boost may distort the loudest parts.", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(.orange)
                 } else if analysis.limited {
                     Label("Boost limited so the loudest parts don't distort.", systemImage: "info.circle")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Lossless: the audio isn't re-encoded, and Reset restores the original exactly. Applies when you save.")
-                    .font(.caption).foregroundStyle(.tertiary)
+                if let err = analysis.boostError {
+                    Label(err, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                }
+                if !boosted {
+                    Text("Lossless: the audio isn't re-encoded, and Reset restores the original exactly. Applies when you save.")
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
             } else if analysis.failed {
                 Text("Couldn't read this song's audio.").font(.callout).foregroundStyle(.secondary)
             } else {
@@ -365,15 +524,7 @@ struct LoudnessCard: View {
         }
         .padding(14)
         .background {
-            StyledPanel(cornerRadius: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(LinearGradient(colors: [theme.purple.opacity(0.12), theme.indigo.opacity(0.14)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.rim.opacity(0.6), lineWidth: 1))
-            }
+            StyledPanel(cornerRadius: 14)
         }
         .onAppear { analysis.analyze(file.url) }
         .onChange(of: file.savedGain) { _, _ in analysis.analyze(file.url) }   // re-measure after saving
@@ -413,7 +564,57 @@ struct LoudnessCard: View {
     }
 
     private func change(_ d: Int) { analysis.limited = false; set(file.tag.gainSteps + d) }
-    private func reset() { analysis.limited = false; set(0) }
+    private func reset() {
+        analysis.limited = false
+        if file.tag.limiterDB != 0 { restoreOriginal() } else { set(0) }
+    }
+
+    /// Runs the limiter boost on the file on disk, keeping any unsaved tag edits in the editor.
+    private func boostWithLimiter() {
+        guard let ffmpeg = Downloader.shared.ffmpeg else { return }
+        let url = file.url
+        file.tag.gainSteps = file.savedGain          // drop any pending lossless change; the boost replaces it
+        analysis.boosting = true
+        analysis.boostError = nil
+        Task.detached(priority: .userInitiated) {
+            let result = Result { try Loudness.limiterBoost(url, ffmpeg: ffmpeg) }
+            await MainActor.run {
+                analysis.boosting = false
+                switch result {
+                case .success(let t):
+                    file.tag.limiterDB = t.limiterDB
+                    file.tag.originalBackup = t.originalBackup
+                    file.tag.gainSteps = 0
+                    file.savedGain = 0
+                case .failure(let e):
+                    analysis.boostError = e.localizedDescription
+                }
+                analysis.analyze(url)
+            }
+        }
+    }
+
+    private func restoreOriginal() {
+        let url = file.url, current = file.tag
+        analysis.boosting = true
+        analysis.boostError = nil
+        Task.detached(priority: .userInitiated) {
+            let result = Result { try Loudness.restoreOriginal(url, keeping: current) }
+            await MainActor.run {
+                analysis.boosting = false
+                switch result {
+                case .success(let t):
+                    file.tag.limiterDB = 0
+                    file.tag.originalBackup = ""
+                    file.tag.gainSteps = t.gainSteps
+                    file.savedGain = t.gainSteps
+                case .failure(let e):
+                    analysis.boostError = e.localizedDescription
+                }
+                analysis.analyze(url)
+            }
+        }
+    }
 
     private func set(_ steps: Int) {
         let clamped = min(max(steps, -20), 20)  // ±30 dB

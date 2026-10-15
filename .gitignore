@@ -14,3 +14,7 @@ Icon/set_icon.swift
 
 # Release zips (./release.sh)
 dist/
+
+# Windows app (Electron): dependencies and build output
+Windows/node_modules/
+Windows/dist/

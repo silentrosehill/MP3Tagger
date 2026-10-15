@@ -1,0 +1,93 @@
+{
+  "name": "mp3-tagger",
+  "productName": "MP3 Tagger",
+  "version": "3.25.0",
+  "description": "MP3 tag editor for Spotify local files",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "node build/make-ico.js && electron-builder --win"
+  },
+  "dependencies": {
+    "htm": "^3.1.1",
+    "mpg123-decoder": "^1.0.3"
+  },
+  "devDependencies": {
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3",
+    "resedit": "^3.1.0"
+  },
+  "build": {
+    "appId": "local.mp3tagger.windows",
+    "productName": "MP3 Tagger",
+    "artifactName": "MP3-Tagger-Windows-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../CHANGELOG.md",
+        "to": "CHANGELOG.md"
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/mpg123-decoder/**",
+      "node_modules/@wasm-audio-decoders/**",
+      "node_modules/@eshaz/**",
+      "node_modules/simple-yenc/**",
+      "src/main/audioWorker.js"
+    ],
+    "afterPack": "build/afterPack.js",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MP3 Tagger",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "MP3-Tagger-Windows-${version}-Setup.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "mp3",
+        "name": "MP3 audio",
+        "role": "Editor",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "mac": {
+      "target": "dir",
+      "identity": null,
+      "icon": "../Icon/AppIcon.icns"
+    }
+  }
+}
