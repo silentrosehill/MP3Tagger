@@ -1,0 +1,47 @@
+# Builds Battery Monitor.app on a Mac and publishes it as a GitHub release download.
+name: Battery Monitor
+
+on:
+  push:
+    paths:
+      - "BatteryMonitor/**"
+      - ".github/workflows/battery-monitor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build universal app
+        id: build
+        working-directory: BatteryMonitor
+        run: |
+          ZIP=$(./release.sh | tail -1)
+          echo "zip=BatteryMonitor/$ZIP" >> "$GITHUB_OUTPUT"
+          echo "version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' 'Battery Monitor.app/Contents/Info.plist')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Battery-Monitor-Mac
+          path: ${{ steps.build.outputs.zip }}
+
+      # --latest=false keeps MP3 Tagger's "latest release" (its download link and updater) untouched.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZIP: ${{ steps.build.outputs.zip }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          TAG="battery-monitor-v$VERSION"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "$ZIP" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Battery Monitor $VERSION" --latest=false \
+              --notes "Menu bar app showing the battery % of your wireless devices (Bluetooth, AirPods, Magic accessories, and USB-dongle headsets like SteelSeries via HeadsetControl). Unzip and drag **Battery Monitor** into Applications. macOS 14+, Apple silicon and Intel."
+          fi
