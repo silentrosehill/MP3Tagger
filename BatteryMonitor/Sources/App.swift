@@ -150,7 +150,7 @@ struct DeviceListView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("For USB-dongle headsets (SteelSeries…), install HeadsetControl in Terminal:")
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("brew install headsetcontrol")
+                    Text("brew install sapd/headsetcontrol/headsetcontrol")
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                 }

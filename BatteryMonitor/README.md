@@ -21,7 +21,7 @@ You need the Xcode Command Line Tools (`xcode-select --install`), same as for MP
 For the SteelSeries / USB-dongle headset, also install HeadsetControl:
 
 ```bash
-brew install headsetcontrol
+brew install sapd/headsetcontrol/headsetcontrol
 ```
 
 Then build the app and put it in Applications:
