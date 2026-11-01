@@ -1,4 +1,2 @@
-__pycache__/
-build/
+Battery Monitor.app/
 dist/
-*.egg-info/

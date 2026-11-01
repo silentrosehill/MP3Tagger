@@ -1,50 +1,43 @@
-# Battery Monitor (macOS)
+# Battery Monitor
 
-A menu bar app that shows the battery % of your wireless devices:
+A menu bar app for macOS that shows the battery % of your wireless devices. Click the icon in the menu bar to see every device with a battery bar.
 
 | Device type | How it's read |
 |---|---|
 | USB-dongle headsets (SteelSeries Arctis / Arctis Nova, Logitech G, Corsair, HyperX…) | [HeadsetControl](https://github.com/Sapd/HeadsetControl) |
-| Bluetooth headphones, AirPods (left/right/case), mice, keyboards, controllers | `system_profiler SPBluetoothDataType` |
+| Bluetooth headphones, AirPods (left / right / case), mice, keyboards, controllers | macOS Bluetooth info (`system_profiler`) |
 | Apple Magic Keyboard / Mouse / Trackpad | `ioreg` (`BatteryPercent`) |
 
-The menu bar shows the **lowest** battery level. Click it to see every device.
-You get a notification when a device drops to 20% or below. The app refreshes every 60 seconds, or right away with *Refresh Now*.
+- The menu bar shows the device with the **lowest** battery.
+- You get a notification when a device drops to 20%.
+- Refreshes every minute, and whenever you click Refresh (⌘R).
+- "Open at Login" switch built in.
+- Lives in the menu bar only (no Dock icon).
 
-## Setup
+## Install
 
-```bash
-brew install headsetcontrol      # needed for the SteelSeries dongle headset
-pip3 install -r requirements.txt
-```
+You need the Xcode Command Line Tools (`xcode-select --install`), same as for MP3 Tagger.
 
-Check that your devices are detected:
-
-```bash
-python3 sources.py
-headsetcontrol -b                # should print your headset's battery
-```
-
-Run the app:
+For the SteelSeries / USB-dongle headset, also install HeadsetControl:
 
 ```bash
-python3 app.py
+brew install headsetcontrol
 ```
 
-### Make it a real .app (optional)
+Then build the app and put it in Applications:
 
 ```bash
-pip3 install py2app
-python3 setup.py py2app
+./build.sh install
 ```
 
-Drag `dist/Battery Monitor.app` into Applications. To start it automatically, add it under
-System Settings → General → Login Items.
+`./build.sh` on its own just builds `Battery Monitor.app` in this folder.
+
+Built for macOS 14 or newer.
 
 ## Notes
 
-- The headset must be turned on and its dongle plugged in. When it's off, it shows "off / unavailable".
-- If `headsetcontrol` says your headset isn't supported, check its
-  [supported devices list](https://github.com/Sapd/HeadsetControl#supported-headsets).
-- A Bluetooth device only shows up if it reports battery to macOS. Some cheaper ones don't.
-- Tests: `python3 -m unittest discover -s tests`
+- The headset has to be on and its dongle plugged in, or it shows "Off".
+- If the headset doesn't show up, run `headsetcontrol -b` in Terminal. If that doesn't show a battery level, HeadsetControl doesn't support that model yet
+  ([supported headsets](https://github.com/Sapd/HeadsetControl#supported-headsets)).
+- A Bluetooth device only shows up if it reports its battery to macOS. Some cheaper ones don't.
+- `Icon/make_icon.swift` draws the icon. Delete `Icon/AppIcon.icns` and rebuild to redraw it.
