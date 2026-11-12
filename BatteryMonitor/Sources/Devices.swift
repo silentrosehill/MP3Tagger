@@ -15,12 +15,16 @@ struct Device: Hashable, Sendable {
     var detail = ""          // "Left", "Right", "Case", "Off"
     var charging = false
 
-    var label: String { detail.isEmpty ? name : "\(name) (\(detail))" }
+    /// "Off" / "Asleep" describe the state, not a part like AirPods' "Left": show them as the status.
+    private var detailIsState: Bool { level == nil && !charging && !detail.isEmpty }
+
+    var label: String { detail.isEmpty || detailIsState ? name : "\(name) (\(detail))" }
     var isLow: Bool { (level ?? 100) <= lowBatteryLevel && !charging }
 
     var statusText: String {
         if let level { return "\(level)%" }
-        return charging ? "Charging" : "Off"
+        if charging { return "Charging" }
+        return detail.isEmpty ? "Off" : detail
     }
 
     var symbol: String {
@@ -40,11 +44,11 @@ struct Device: Hashable, Sendable {
 
 let lowBatteryLevel = 20
 
-/// Reads battery levels from the three places macOS / HeadsetControl expose them.
+/// Reads battery levels from HeadsetControl, Razer mice, and what macOS itself reports.
 /// Everything here is blocking: call it off the main thread.
 enum DeviceReader {
     static func readAll() -> [Device] {
-        merge(readHeadsetControl(), readSystemProfiler(), readIORegistry())
+        merge(readHeadsetControl(), RazerReader.read(), readSystemProfiler(), readIORegistry())
     }
 
     /// The same device can show up in more than one source; keep the first.

@@ -3,7 +3,6 @@ import AppKit
 import ServiceManagement
 import UserNotifications
 
-@main
 struct BatteryMonitorApp: App {
     @StateObject private var store = BatteryStore.shared
 

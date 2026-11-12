@@ -5,6 +5,7 @@ A menu bar app for macOS that shows the battery % of your wireless devices. Clic
 | Device type | How it's read |
 |---|---|
 | USB-dongle headsets (SteelSeries Arctis / Arctis Nova, Logitech G, Corsair, HyperX…) | [HeadsetControl](https://github.com/Sapd/HeadsetControl) |
+| Razer wireless mice with a USB dongle (Viper Ultimate, DeathAdder V2 Pro, Basilisk Ultimate…) | Razer's own protocol, read directly (no Synapse needed) |
 | Bluetooth headphones, AirPods (left / right / case), mice, keyboards, controllers | macOS Bluetooth info (`system_profiler`) |
 | Apple Magic Keyboard / Mouse / Trackpad | `ioreg` (`BatteryPercent`) |
 
@@ -35,6 +36,9 @@ Then build the app and put it in Applications:
 Built for macOS 14 or newer.
 
 ## Notes
+
+- Something missing? Run this in Terminal and send the output to Claude:
+  `"/Applications/Battery Monitor.app/Contents/MacOS/BatteryMonitor" --debug`
 
 - The headset has to be on and its dongle plugged in, or it shows "Off".
 - If the headset doesn't show up, run `headsetcontrol -b` in Terminal. If that doesn't show a battery level, HeadsetControl doesn't support that model yet
